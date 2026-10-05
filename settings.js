@@ -1,7 +1,7 @@
 (() => {
 'use strict';
 
-const STORAGE = { effort: 'deepseek.effort', mode: 'openghost.mode', model: 'openghost.model', catalog: 'openghost.catalog' };
+const STORAGE = { effort: 'deepseek.effort', mode: 'openghost.mode', model: 'openghost.model', catalog: 'openghost.catalog', customProviders: 'openghost.customProviders' };
 const KEYS = { openai: 'openai.apiKey', anthropic: 'anthropic.apiKey', kimchi: 'kimchi.apiKey', deepseek: 'deepseek.apiKey', commandcode: 'commandcode.apiKey' };
 // The order providers appear in, in the settings and in the model picker.
 const ORDER = ['chatgpt', 'openai', 'anthropic', 'kimchi', 'deepseek', 'commandcode'];
@@ -100,6 +100,8 @@ class Settings {
   this.unsaved = new Set();
   this.keys = this.readKeys();
   this.account = { connected: false };
+  this.customProviders = this.readCustomProviders();
+  Usage.setProviderNames(this.customProviders);
   this.catalog = this.readCatalog();
   this.models = [];
   this.efforts = EFFORTS.slice();
@@ -114,8 +116,9 @@ class Settings {
   this.checks = {};
   this.checked = new Set();
   // Keys saved in an earlier session count as working until a check says otherwise.
-  this.accepted = new Set(Object.keys(KEYS).filter(provider => this.keys[provider]));
+  this.accepted = new Set(Object.keys(this.keys).filter(provider => this.keys[provider]));
   this.build();
+  this.providersReady = this.saveCustomProviders();
   this.pager();
   this.collect();
   dialog.addEventListener('dismiss', () => dialog.close());
@@ -199,6 +202,18 @@ class Settings {
   return { chatgpt: [], openai: [], anthropic: [], kimchi: KNOWN_KIMCHI.slice(), deepseek: [], commandcode: KNOWN_COMMANDCODE.slice(), ...saved };
  }
 
+ readCustomProviders() {
+  try {
+   const saved = JSON.parse(localStorage.getItem(STORAGE.customProviders)) || [];
+   return Array.isArray(saved) ? saved.filter(item => item && typeof item.id === 'string' && /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.id) && typeof item.name === 'string' && typeof item.baseUrl === 'string' && typeof item.models === 'string') : [];
+  } catch { return []; }
+ }
+
+  saveCustomProviders() {
+  localStorage.setItem(STORAGE.customProviders, JSON.stringify(this.customProviders));
+  return Providers.registerCustomProviders(this.customProviders.map(({ id, name, baseUrl }) => ({ id, name, baseUrl })));
+ }
+
  saveCatalog() {
   try { localStorage.setItem(STORAGE.catalog, JSON.stringify(this.catalog)); } catch {}
  }
@@ -214,15 +229,17 @@ class Settings {
    keys[provider] = old;
    vault.write(provider, old).then(saved => { if (saved) localStorage.removeItem(name); }).catch(() => {});
   }
-  return Object.fromEntries(Object.keys(KEYS).map(provider => [provider, keys[provider] || '']));
+  return { ...keys, ...Object.fromEntries(Object.keys(KEYS).map(provider => [provider, keys[provider] || ''])) };
  }
 
  // A key that could not be saved still works until the app closes; the line under its field says so rather than lose it quietly.
  saveKey(provider, key) {
   const vault = window.openghost?.keys;
   if (!vault) {
-   if (key) localStorage.setItem(KEYS[provider], key);
-   else localStorage.removeItem(KEYS[provider]);
+   if (KEYS[provider]) {
+    if (key) localStorage.setItem(KEYS[provider], key);
+    else localStorage.removeItem(KEYS[provider]);
+   }
    return;
   }
   vault.write(provider, key).then(saved => {
@@ -250,18 +267,21 @@ class Settings {
  }
 
  connected(provider) {
-  return provider === 'chatgpt' ? !!this.account.connected : !!this.keys[provider];
+  if (provider === 'chatgpt') return !!this.account.connected;
+  if (this.customProviders.some(item => item.id === provider)) return !!this.catalog[provider]?.length && (!this.keys[provider] || this.accepted.has(provider));
+  return !!this.keys[provider];
  }
 
  // The badge turns green only once the provider has taken the key, so a mistyped key never looks connected.
  working(provider) {
-  return this.connected(provider) && (provider === 'chatgpt' || this.accepted.has(provider));
+  const custom = this.customProviders.some(item => item.id === provider);
+  return this.connected(provider) && (provider === 'chatgpt' || custom && !this.keys[provider] || this.accepted.has(provider));
  }
 
  // The picker offers the models of every connected provider, as each provider lists them. No model is known to the app
  // by itself: with nothing connected there is none, and the picker leads to the settings instead.
  collect() {
-  this.models = ORDER.filter(provider => this.connected(provider)).flatMap(provider => this.catalog[provider] || []);
+  this.models = [...ORDER, ...this.customProviders.map(provider => provider.id)].filter(provider => this.connected(provider)).flatMap(provider => this.catalog[provider] || []);
   this.paint();
  }
 
@@ -291,6 +311,7 @@ class Settings {
    model: model?.api || id,
    name: model?.name || id,
    key: this.keys[provider] || '',
+   apiUrl: this.customProviders.find(item => item.id === provider)?.baseUrl,
    ready: !!model && this.connected(provider),
    effort,
    efforts,
@@ -355,7 +376,7 @@ class Settings {
   this.read = Date.now();
   await this.syncAccount();
   await Promise.all([
-   ...Object.keys(KEYS).filter(provider => this.keys[provider]).map(provider => this.checkKey(provider)),
+   ...Object.keys(this.keys).filter(provider => this.keys[provider] && (KEYS[provider] || this.customProviders.some(item => item.id === provider))).map(provider => this.checkKey(provider)),
    this.account.connected ? this.refresh('chatgpt').catch(() => {}) : null,
   ]);
  }
@@ -365,7 +386,7 @@ class Settings {
  freshen() {
   if (Date.now() - this.read < FRESH) return;
   this.read = Date.now();
-  for (const provider of ORDER) if (this.connected(provider)) this.refresh(provider).catch(() => {});
+  for (const provider of [...ORDER, ...this.customProviders.map(item => item.id)]) if (this.connected(provider)) this.refresh(provider).catch(() => {});
  }
 
  // A sign-in can lapse while the app runs, so the settings ask how it stands each time they open.
@@ -379,6 +400,10 @@ class Settings {
  // Loads a provider's models into the catalog; the last request for a provider wins.
  async refresh(provider) {
   const token = (this.checks[provider] = (this.checks[provider] || 0) + 1);
+  if (provider.startsWith('custom-')) {
+   const registered = await this.providersReady;
+   if (!registered) throw new Error('Could not register custom providers with the desktop process');
+  }
   let models;
   if (provider === 'kimchi') {
    try {
@@ -395,7 +420,17 @@ class Settings {
     models = KNOWN_COMMANDCODE.slice();
    }
   } else {
-   models = await Providers.models(provider, this.keys[provider]);
+   const custom = this.customProviders.find(item => item.id === provider);
+   if (custom) {
+    const ids = custom.models.split(',').map(id => id.trim()).filter(Boolean);
+    try {
+     const remote = await Providers.models(provider, this.keys[provider], custom.baseUrl);
+     models = ids.length ? ids.map(id => this.customModel(custom, id)) : remote;
+    } catch (error) {
+     if (!ids.length) throw error;
+     models = ids.map(id => this.customModel(custom, id));
+    }
+   } else models = await Providers.models(provider, this.keys[provider]);
   }
   if (token !== this.checks[provider]) return false;
   this.catalog[provider] = models;
@@ -404,22 +439,91 @@ class Settings {
   return true;
  }
 
+ customModel(provider, api) {
+  return { id: `${provider.id}:${api}`, api, provider: provider.id, name: api, context: DEFAULT_CONTEXT, vision: true };
+ }
+
+ saveCustomModelList(provider) {
+  const manual = provider.models.split(',').map(id => id.trim()).filter(Boolean).map(id => this.customModel(provider, id));
+  this.catalog[provider.id] = manual.length ? manual : this.catalog[provider.id] || [];
+  this.saveCatalog();
+ }
+
+ customSection(provider) {
+  return `<section class="provider custom-provider" data-provider="${provider.id}">
+   <header class="provider-head"><h3 class="provider-name">${escapeHtml(provider.name)}</h3><span class="provider-models"></span><span class="provider-state">${escapeHtml(I18n.t('settings.off'))}</span></header>
+   <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.name'))}</span><input class="settings-key" data-field="name" type="text" maxlength="80" value="${escapeHtml(provider.name)}"></label>
+   <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.baseUrl'))}</span><input class="settings-key" data-field="baseUrl" type="url" value="${escapeHtml(provider.baseUrl)}" placeholder="https://api.example.com/v1"></label>
+   <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.models'))}</span><input class="settings-key" data-field="models" type="text" value="${escapeHtml(provider.models)}" placeholder="model-a, model-b"></label>
+   <div class="settings-row"><div class="settings-text"><label class="settings-label">${escapeHtml(I18n.t('settings.custom.key'))}</label><p class="settings-hint">${escapeHtml(I18n.t('settings.custom.keyHint'))}</p></div><div class="settings-control"><input class="settings-key custom-key" data-provider="${provider.id}" type="password" autocomplete="off" spellcheck="false"><p class="settings-status" data-provider="${provider.id}" role="status"></p></div></div>
+   <div class="custom-provider-actions"><button type="button" class="settings-button" data-action="refresh">${escapeHtml(I18n.t('settings.custom.refresh'))}</button><button type="button" class="settings-button" data-action="remove">${escapeHtml(I18n.t('settings.custom.remove'))}</button></div>
+  </section>`;
+ }
+
+ addCustomProvider() {
+  const provider = { id: `custom-${crypto.randomUUID()}`, name: 'Custom provider', baseUrl: 'https://api.example.com/v1', models: '' };
+  this.customProviders.push(provider);
+  this.keys[provider.id] = '';
+  this.catalog[provider.id] = [];
+  this.providersReady = this.saveCustomProviders();
+  this.build();
+  this.changed();
+  this.inputs[provider.id]?.focus();
+ }
+
+ updateCustom(provider) {
+  const card = this.list.querySelector(`[data-provider="${provider.id}"]`);
+  for (const input of card.querySelectorAll('[data-field]')) provider[input.dataset.field] = input.value.trim();
+  provider.name ||= 'Custom provider';
+  card.querySelector('.provider-name').textContent = provider.name;
+  provider.baseUrl = provider.baseUrl.replace(/\/$/, '');
+  Usage.setProviderNames(this.customProviders);
+  this.providersReady = this.saveCustomProviders();
+  this.saveCustomModelList(provider);
+  this.changed();
+ }
+
+ async removeCustom(provider) {
+  this.customProviders = this.customProviders.filter(item => item.id !== provider.id);
+  delete this.catalog[provider.id];
+  delete this.keys[provider.id];
+  this.accepted.delete(provider.id);
+  this.checked.delete(provider.id);
+  this.saveCatalog();
+  this.providersReady = this.saveCustomProviders();
+  await window.openghost?.keys?.write(provider.id, '');
+  this.build();
+  this.changed();
+ }
+
  build() {
-  this.list.innerHTML = [
-   section('openai', 'OpenAI', accountRow() + keyRow('openai')),
-   section('anthropic', 'Anthropic', keyRow('anthropic')),
-   section('kimchi', 'Kimchi', keyRow('kimchi')),
-   section('deepseek', 'DeepSeek', keyRow('deepseek')),
-   section('commandcode', 'Command Code', keyRow('commandcode')),
-  ].join('');
+ this.list.innerHTML = [
+  section('openai', 'OpenAI', accountRow() + keyRow('openai')),
+  section('anthropic', 'Anthropic', keyRow('anthropic')),
+  section('kimchi', 'Kimchi', keyRow('kimchi')),
+  section('deepseek', 'DeepSeek', keyRow('deepseek')),
+  section('commandcode', 'Command Code', keyRow('commandcode')),
+  ...this.customProviders.map(provider => this.customSection(provider)),
+  `<button type="button" class="settings-button custom-provider-add" data-action="add">${escapeHtml(I18n.t('settings.custom.add'))}</button>`,
+ ].join('');
   this.inputs = {};
-  for (const input of this.list.querySelectorAll('.settings-key')) {
+  for (const input of this.list.querySelectorAll('.settings-key[data-provider]')) {
    const provider = input.dataset.provider;
    this.inputs[provider] = input;
-   input.value = this.keys[provider];
+   input.value = this.keys[provider] || '';
    input.addEventListener('input', () => this.onKeyInput(provider));
-   input.nextElementSibling.addEventListener('click', () => this.reveal(provider, input.type === 'password'));
+   if (input.nextElementSibling?.classList.contains('settings-key-eye')) input.nextElementSibling.addEventListener('click', () => this.reveal(provider, input.type === 'password'));
   }
+  for (const provider of this.customProviders) {
+   const card = this.list.querySelector(`[data-provider="${provider.id}"]`);
+   for (const input of card.querySelectorAll('[data-field]')) input.addEventListener('change', () => this.updateCustom(provider));
+   card.addEventListener('click', event => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'remove') this.removeCustom(provider);
+    else if (action === 'refresh') this.checkKey(provider);
+   });
+  }
+  this.list.querySelector('.custom-provider-add').addEventListener('click', () => this.addCustomProvider());
   this.statuses = Object.fromEntries([...this.list.querySelectorAll('.settings-status')].map(node => [node.dataset.provider, node]));
   this.accountBox = this.list.querySelector('.settings-account');
   this.accountBox.addEventListener('click', event => {

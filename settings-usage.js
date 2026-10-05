@@ -5,8 +5,9 @@
 // and a column for each of the last 30 days. Below, a section for every provider in use: for the ChatGPT sign-in its plan and
 // limits as ChatGPT counts them, for DeepSeek the balance on the account, and for each the tokens, the cache and the models.
 const PERIODS = [['today', 1], ['week', 7], ['month', 30], ['all', 0]];
-const ORDER = ['chatgpt', 'openai', 'anthropic', 'deepseek'];
+const BUILT_IN_ORDER = ['chatgpt', 'openai', 'anthropic', 'kimchi', 'deepseek', 'commandcode'];
 const TONES = { chatgpt: 'turquoise', openai: 'lilac', anthropic: 'orange', deepseek: 'blue' };
+const toneOf = provider => TONES[provider] || 'blue';
 const PLANS = {
  free: 'Free', go: 'Go', plus: 'Plus', prolite: 'Pro 5x', pro: 'Pro 20x', team: 'Team', business: 'Business',
  self_serve_business_usage_based: 'Business', enterprise: 'Enterprise', enterprise_cbp_usage_based: 'Enterprise', edu: 'Edu',
@@ -27,7 +28,7 @@ const escapeHtml = text => String(text).replace(/[&<>"]/g, c => ({ '&': '&amp;',
 const compact = n => new Intl.NumberFormat(I18n.lang, { notation: 'compact', maximumFractionDigits: n < 1000 ? 0 : 1 }).format(n);
 const full = n => new Intl.NumberFormat(I18n.lang).format(n);
 const easeOut = t => 1 - (1 - t) ** 3;
-const nameOf = provider => I18n.t(`usage.name.${provider}`);
+const nameOf = provider => Usage.providerName(provider);
 const dateOf = day => { const [y, m, d] = day.split('-').map(Number); return new Date(y, m - 1, d); };
 const monthName = key => new Intl.DateTimeFormat(I18n.lang, { month: 'long', year: 'numeric' }).format(dateOf(`${key}-01`));
 
@@ -76,9 +77,9 @@ function resetText(at) {
 
 // A thin bar split between the providers in their colors, each as wide as its share.
 function split(totals) {
- const parts = ORDER.filter(provider => totals[provider]?.tokens);
+  const parts = Object.keys(totals).filter(provider => totals[provider]?.tokens);
  if (!parts.length) return '<span class="usage-split is-empty"></span>';
- return `<span class="usage-split">${parts.map(provider => `<i class="t-${TONES[provider]}" style="flex-grow:${totals[provider].tokens}"></i>`).join('')}</span>`;
+ return `<span class="usage-split">${parts.map(provider => `<i class="t-${toneOf(provider)}" style="flex-grow:${totals[provider].tokens}"></i>`).join('')}</span>`;
 }
 
 // A limit window as a row: its name, a meter of how much is used, the share, and when it starts over.
@@ -200,7 +201,8 @@ class UsageSettings {
  render(animate) {
   const periods = PERIODS.map(([name, days]) => ({ name, totals: Usage.totals(days) }));
   const all = periods[periods.length - 1].totals;
-  const providers = ORDER.filter(provider => all[provider] || this.connected(provider));
+  const order = [...BUILT_IN_ORDER, ...this.settings.customProviders.map(provider => provider.id), ...Object.keys(all)];
+  const providers = [...new Set(order)].filter(provider => all[provider] || this.connected(provider));
   if (!this.scopes().includes(this.scope)) this.scope = '';
   const month = this.scope ? Usage.between(`${this.scope}-01`, `${this.scope}-31`) : null;
   this.root.innerHTML = `
@@ -227,9 +229,10 @@ class UsageSettings {
   const shown = scope ? Usage.between(`${scope}-01`, `${scope}-31`) : Usage.totals(CHART_DAYS);
   const top = Math.max(1, ...sums), since = Usage.since, total = sums.reduce((sum, n) => sum + n, 0);
   // The legend names the providers of the days on the chart, each with its share of them.
-  const legend = ORDER.filter(provider => shown[provider]?.tokens).map(provider => `<span class="usage-key t-${TONES[provider]}"><i></i>${escapeHtml(nameOf(provider))}<b>${escapeHtml(compact(shown[provider].tokens))}</b></span>`).join('');
+  const order = [...new Set([...BUILT_IN_ORDER, ...this.settings.customProviders.map(provider => provider.id), ...Object.keys(shown)])];
+  const legend = order.filter(provider => shown[provider]?.tokens).map(provider => `<span class="usage-key t-${toneOf(provider)}"><i></i>${escapeHtml(nameOf(provider))}<b>${escapeHtml(compact(shown[provider].tokens))}</b></span>`).join('');
   const columns = days.map((day, k) => {
-   const parts = ORDER.filter(provider => day.providers[provider]).map(provider => `<i class="t-${TONES[provider]}" style="flex-grow:${day.providers[provider]}"></i>`).join('');
+   const parts = order.filter(provider => day.providers[provider]).map(provider => `<i class="t-${toneOf(provider)}" style="flex-grow:${day.providers[provider]}"></i>`).join('');
    const height = sums[k] ? Math.max(0.04, sums[k] / top) : 0;
    return `<span class="usage-day${sums[k] ? '' : ' is-empty'}" data-k="${k}" style="--h:${height.toFixed(3)};--k:${k}"><span class="usage-day-bar">${parts}</span></span>`;
   }).join('');
@@ -322,7 +325,7 @@ class UsageSettings {
  frame(provider, body) {
   const on = this.connected(provider);
   return `
-   <section class="provider usage-provider t-${TONES[provider]}${on ? '' : ' is-off'}" data-provider="${provider}">
+   <section class="provider usage-provider t-${toneOf(provider)}${on ? '' : ' is-off'}" data-provider="${provider}">
     <header class="provider-head">
      <h3 class="provider-name">${escapeHtml(nameOf(provider))}</h3>
      <span class="usage-account" data-slot="account" hidden><span class="usage-account-label"></span><span class="usage-account-value"></span></span>
@@ -403,7 +406,8 @@ class UsageSettings {
  fillTip(k) {
   const tip = this.root.querySelector('.usage-tip'), day = this.days?.[k];
   if (!tip || !day) return;
-  const rows = ORDER.filter(provider => day.providers[provider]).map(provider => `<span class="usage-tip-row t-${TONES[provider]}"><i></i>${escapeHtml(nameOf(provider))}<b>${escapeHtml(compact(day.providers[provider]))}</b></span>`).join('');
+  const order = [...new Set([...BUILT_IN_ORDER, ...this.settings.customProviders.map(provider => provider.id), ...Object.keys(day.providers)])];
+  const rows = order.filter(provider => day.providers[provider]).map(provider => `<span class="usage-tip-row t-${toneOf(provider)}"><i></i>${escapeHtml(nameOf(provider))}<b>${escapeHtml(compact(day.providers[provider]))}</b></span>`).join('');
   const date = new Intl.DateTimeFormat(I18n.lang, { weekday: 'short', month: 'short', day: 'numeric' }).format(dateOf(day.day));
   tip.innerHTML = `<span class="usage-tip-head">${escapeHtml(date)}</span><span class="usage-tip-total">${escapeHtml(this.sums[k] ? I18n.t('usage.tokens', { n: full(this.sums[k]) }) : I18n.t('usage.idle'))}</span>${rows}`;
  }

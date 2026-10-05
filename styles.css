@@ -8997,6 +8997,32 @@ h6.md-h {
   padding: 14px 0;
 }
 
+.custom-provider-field {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(220px, 1fr);
+  align-items: center;
+  gap: 12px 24px;
+  margin-top: 12px;
+  color: var(--fg-secondary);
+  font-size: 13px;
+}
+
+.custom-provider-field .settings-key {
+  width: 100%;
+  padding-right: 16px;
+}
+
+.custom-provider-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+
+.custom-provider-add {
+  margin-top: 22px;
+}
+
 /* Settings → Usage. On top a card with the periods, each split by provider in its color, and a column for each of the last
    30 days; then a section for every provider in use. */
 .usage-summary {

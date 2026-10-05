@@ -9012,6 +9012,19 @@ h6.md-h {
   padding-right: 16px;
 }
 
+.custom-provider-cache {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--fg-secondary);
+  font-size: 13px;
+}
+
+.custom-provider-cache input {
+  accent-color: rgb(var(--composer-accent-rgb));
+}
+
 .custom-provider-actions {
   display: flex;
   justify-content: flex-end;

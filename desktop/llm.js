@@ -44,7 +44,7 @@ function cleanCustomProviders(list) {
   try { url = new URL(item.baseUrl); } catch { return null; }
   const local = url.hostname === 'localhost' || url.hostname === '::1' || /^127(?:\.\d{1,3}){3}$/.test(url.hostname);
   if (!['http:', 'https:'].includes(url.protocol) || (url.protocol === 'http:' && !local) || url.username || url.password || url.search || url.hash || !url.pathname.replace(/\/$/, '').endsWith('/v1')) return null;
-  next.set(item.id, { id: item.id, name: item.name.trim().slice(0, 80), baseUrl: url.href.replace(/\/$/, '') });
+  next.set(item.id, { id: item.id, name: item.name.trim().slice(0, 80), baseUrl: url.href.replace(/\/$/, ''), promptCacheKey: item.promptCacheKey === true });
  }
  return next;
 }
@@ -74,6 +74,7 @@ async function start(sender, id, request) {
    chatgpt: ChatGPT.credentials,
    version: app.getVersion(),
    apiUrl: custom?.baseUrl || (isKimchi ? KIMCHI_CONFIG.apiUrl : isCommandCode ? COMMANDCODE_CONFIG.apiUrl : undefined),
+   promptCacheKey: custom?.promptCacheKey === true,
    headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined,
    extraBody: isKimchi ? KIMCHI_CONFIG.extraBody : isCommandCode ? COMMANDCODE_CONFIG.extraBody : undefined,
   });

@@ -211,7 +211,7 @@ class Settings {
 
   saveCustomProviders() {
   localStorage.setItem(STORAGE.customProviders, JSON.stringify(this.customProviders));
-  return Providers.registerCustomProviders(this.customProviders.map(({ id, name, baseUrl }) => ({ id, name, baseUrl })));
+  return Providers.registerCustomProviders(this.customProviders.map(({ id, name, baseUrl, promptCacheKey }) => ({ id, name, baseUrl, promptCacheKey: promptCacheKey === true })));
  }
 
  saveCatalog() {
@@ -312,6 +312,7 @@ class Settings {
    name: model?.name || id,
    key: this.keys[provider] || '',
    apiUrl: this.customProviders.find(item => item.id === provider)?.baseUrl,
+   promptCacheKey: this.customProviders.find(item => item.id === provider)?.promptCacheKey === true,
    ready: !!model && this.connected(provider),
    effort,
    efforts,
@@ -455,6 +456,7 @@ class Settings {
    <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.name'))}</span><input class="settings-key" data-field="name" type="text" maxlength="80" value="${escapeHtml(provider.name)}"></label>
    <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.baseUrl'))}</span><input class="settings-key" data-field="baseUrl" type="url" value="${escapeHtml(provider.baseUrl)}" placeholder="https://api.example.com/v1"></label>
    <label class="custom-provider-field"><span>${escapeHtml(I18n.t('settings.custom.models'))}</span><input class="settings-key" data-field="models" type="text" value="${escapeHtml(provider.models)}" placeholder="model-a, model-b"></label>
+   <label class="custom-provider-cache"><input type="checkbox" data-field="promptCacheKey"${provider.promptCacheKey ? ' checked' : ''}><span>${escapeHtml(I18n.t('settings.custom.cacheKey'))}</span></label>
    <div class="settings-row"><div class="settings-text"><label class="settings-label">${escapeHtml(I18n.t('settings.custom.key'))}</label><p class="settings-hint">${escapeHtml(I18n.t('settings.custom.keyHint'))}</p></div><div class="settings-control"><input class="settings-key custom-key" data-provider="${provider.id}" type="password" autocomplete="off" spellcheck="false"><p class="settings-status" data-provider="${provider.id}" role="status"></p></div></div>
    <div class="custom-provider-actions"><button type="button" class="settings-button" data-action="refresh">${escapeHtml(I18n.t('settings.custom.refresh'))}</button><button type="button" class="settings-button" data-action="remove">${escapeHtml(I18n.t('settings.custom.remove'))}</button></div>
   </section>`;
@@ -473,7 +475,7 @@ class Settings {
 
  updateCustom(provider) {
   const card = this.list.querySelector(`[data-provider="${provider.id}"]`);
-  for (const input of card.querySelectorAll('[data-field]')) provider[input.dataset.field] = input.value.trim();
+  for (const input of card.querySelectorAll('[data-field]')) provider[input.dataset.field] = input.type === 'checkbox' ? input.checked : input.value.trim();
   provider.name ||= 'Custom provider';
   card.querySelector('.provider-name').textContent = provider.name;
   provider.baseUrl = provider.baseUrl.replace(/\/$/, '');

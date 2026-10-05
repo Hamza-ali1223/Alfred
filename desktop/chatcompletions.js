@@ -45,8 +45,8 @@ async function failure(response) {
 }
 
 async function models({ provider = 'kimchi', key, apiUrl = 'https://llm.kimchi.dev/openai/v1', headers = {}, preset = [] }) {
- const reqHeaders = { Authorization: `Bearer ${key}`, ...(headers || {}) };
- console.log(`[LLM] Fetching models from: ${apiUrl}/models (headers: ${JSON.stringify(reqHeaders)})`);
+ const reqHeaders = { ...(key ? { Authorization: `Bearer ${key}` } : {}), ...(headers || {}) };
+ console.log(`[LLM] Fetching models from: ${apiUrl}/models`);
  const response = await fetch(`${apiUrl}/models`, { headers: reqHeaders });
  if (!response.ok) {
   console.error(`[LLM] Models fetch failed with HTTP ${response.status} for ${apiUrl}/models`);
@@ -107,12 +107,12 @@ async function stream(request, context) {
  };
  if (tools?.length) { body.tools = tools; body.tool_choice = 'auto'; }
  const reqHeaders = {
-  Authorization: `Bearer ${key}`,
+  ...(key ? { Authorization: `Bearer ${key}` } : {}),
   'Content-Type': 'application/json',
   Accept: 'text/event-stream',
   ...(headers || {}),
  };
- console.log(`[LLM] Streaming chat to: ${apiUrl}/chat/completions (model: ${model}, headers: ${JSON.stringify(reqHeaders)})`);
+ console.log(`[LLM] Streaming chat to: ${apiUrl}/chat/completions (model: ${model})`);
  let response;
  try {
   response = await fetch(`${apiUrl}/chat/completions`, {

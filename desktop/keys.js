@@ -9,6 +9,8 @@ const path = require('node:path');
 const { app, ipcMain, safeStorage } = require('electron');
 
 const PROVIDERS = new Set(['openai', 'anthropic', 'deepseek', 'kimchi', 'commandcode']);
+const CUSTOM_PROVIDER = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const allowed = provider => PROVIDERS.has(provider) || CUSTOM_PROVIDER.test(provider);
 // Windows can refuse for a moment to replace a file something still has open, as an antivirus scan does right after a write.
 const RETRY = { times: 6, wait: 15, codes: new Set(['EPERM', 'EACCES', 'EBUSY']) };
 
@@ -22,7 +24,7 @@ function load() {
  try {
   const data = fs.readFileSync(file());
   const saved = JSON.parse(encrypted() ? safeStorage.decryptString(data) : data.toString('utf8'));
-  keys = Object.fromEntries(Object.entries(saved).filter(([provider, key]) => PROVIDERS.has(provider) && typeof key === 'string' && key));
+  keys = Object.fromEntries(Object.entries(saved).filter(([provider, key]) => allowed(provider) && typeof key === 'string' && key));
  } catch {
   keys = {};
  }
@@ -56,7 +58,7 @@ function write(provider, key) {
 function register(fromApp) {
  ipcMain.on('keys:read', event => { event.returnValue = fromApp(event) ? { ...keys } : {}; });
  ipcMain.handle('keys:write', (event, provider, key) => {
-  if (!fromApp(event) || !PROVIDERS.has(provider) || typeof key !== 'string') return false;
+  if (!fromApp(event) || !allowed(provider) || typeof key !== 'string') return false;
   write(provider, key.trim());
   return true;
  });

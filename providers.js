@@ -5,6 +5,8 @@
 // Whatever the provider, a call resolves to the same result: content, reasoning, tool calls, finish reason and usage.
 const bridge = window.openghost?.llm || null;
 const listeners = new Map();
+let customProvidersReady = Promise.resolve(true);
+const registerCustomProviders = providers => { customProvidersReady = bridge?.customProviders(providers) || Promise.resolve(false); return customProvidersReady; };
 bridge?.onEvent(data => listeners.get(data.id)?.(data));
 
 const NAMES = { deepseek: 'DeepSeek', openai: 'OpenAI', chatgpt: 'ChatGPT', anthropic: 'Anthropic', kimchi: 'Kimchi', commandcode: 'Command Code' };
@@ -30,8 +32,9 @@ function explain(provider, { status = 0, code = '', message = '' }) {
 const aborted = partial => Object.assign(new DOMException('Aborted', 'AbortError'), { partial });
 
 // `once`: a request nothing will follow, so there is no point in paying a provider to keep its start in a cache.
-function viaMain(config, { messages, tools, signal, onReasoning, onContent, maxTokens, session, once = false }) {
- if (!bridge) return Promise.reject(new ProviderError(I18n.t('error.desktop', { provider: NAMES[config.provider] })));
+async function viaMain(config, { messages, tools, signal, onReasoning, onContent, maxTokens, session, once = false }) {
+ if (!bridge) throw new ProviderError(I18n.t('error.desktop', { provider: NAMES[config.provider] }));
+ if (config.provider.startsWith('custom-') && !(await customProvidersReady)) throw new ProviderError('Custom provider configuration is not ready');
  const id = `llm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
  const request = {
   provider: config.provider, key: config.key, model: config.model, effort: config.effort, vision: config.vision,
@@ -96,6 +99,7 @@ async function complete(config, { messages, signal, maxTokens = 40, onUsage }) {
 }
 
 async function models(provider, key, apiUrl) {
+ if (provider.startsWith('custom-') && !(await customProvidersReady)) throw new ProviderError('Custom provider configuration is not ready');
  if (provider === 'deepseek') return (await DeepSeek.listModels(key)).map(model => ({ ...model, provider: 'deepseek', api: model.id }));
  if (!bridge) return [];
  const reply = await bridge.models(provider, key, apiUrl || (provider === 'kimchi' ? 'https://llm.kimchi.dev/openai/v1' : provider === 'commandcode' ? 'http://127.0.0.1:8787/v1' : undefined));
@@ -103,5 +107,5 @@ async function models(provider, key, apiUrl) {
  return reply.models;
 }
 
-window.Providers = { stream, complete, models, NAMES, available: !!bridge };
+window.Providers = { stream, complete, models, NAMES, registerCustomProviders, available: !!bridge };
 })();

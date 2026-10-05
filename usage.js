@@ -6,6 +6,8 @@
 const KEY = 'usage';
 const SAVE_DELAY = 800;
 const PROVIDERS = ['chatgpt', 'openai', 'anthropic', 'kimchi', 'deepseek', 'commandcode'];
+const CUSTOM_PROVIDER = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const providerNames = {};
 // Per day and model: tokens sent, of them read from the provider's cache, written to it, tokens written back, requests.
 const [INPUT, CACHED, WRITTEN, OUTPUT, REQUESTS] = [0, 1, 2, 3, 4];
 
@@ -46,7 +48,7 @@ class Usage {
  // One answer's tokens: what was sent (and how much of it the provider read from its cache or wrote to it) and what came back.
  record({ provider, model, name }, usage) {
   const parts = this.parts(usage);
-  if (!parts || !PROVIDERS.includes(provider) || !model) return;
+  if (!parts || !(PROVIDERS.includes(provider) || CUSTOM_PROVIDER.test(provider)) || !model) return;
   const { input, cached, written, output } = parts;
   this.ready.then(() => {
    const data = this.data, id = `${provider}|${model}`;
@@ -123,6 +125,14 @@ class Usage {
 
  get since() {
   return this.data.since;
+ }
+
+ setProviderNames(providers) {
+  for (const provider of providers) providerNames[provider.id] = provider.name;
+ }
+
+ providerName(provider) {
+  return providerNames[provider] || I18n.t(`usage.name.${provider}`);
  }
 
  onChange(listener) {

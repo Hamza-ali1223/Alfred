@@ -152,7 +152,7 @@ class ModelStage {
     const label = document.createElement('div');
     label.className = 'model-group';
     label.dataset.provider = provider;
-    label.textContent = GROUPS[provider] || provider;
+    label.textContent = GROUPS[provider] || this.settings.customProviders.find(item => item.id === provider)?.name || provider;
     this.groups.push(label);
     slots.push(slot(label));
    }

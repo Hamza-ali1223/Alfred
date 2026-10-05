@@ -32,6 +32,25 @@ const COMMANDCODE_CONFIG = {
 
 const runs = new Map();
 const PROVIDERS = new Set(['openai', 'chatgpt', 'anthropic', 'kimchi', 'commandcode']);
+const CUSTOM_ID = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const customProviders = new Map();
+
+function cleanCustomProviders(list) {
+ if (!Array.isArray(list)) return null;
+ const next = new Map();
+ for (const item of list) {
+  if (!item || !CUSTOM_ID.test(item.id) || typeof item.name !== 'string' || !item.name.trim() || typeof item.baseUrl !== 'string') return null;
+  let url;
+  try { url = new URL(item.baseUrl); } catch { return null; }
+  const local = url.hostname === 'localhost' || url.hostname === '::1' || /^127(?:\.\d{1,3}){3}$/.test(url.hostname);
+  if (!['http:', 'https:'].includes(url.protocol) || (url.protocol === 'http:' && !local) || url.username || url.password || url.search || url.hash || !url.pathname.replace(/\/$/, '').endsWith('/v1')) return null;
+  next.set(item.id, { id: item.id, name: item.name.trim().slice(0, 80), baseUrl: url.href.replace(/\/$/, '') });
+ }
+ return next;
+}
+
+const known = provider => PROVIDERS.has(provider) || customProviders.has(provider);
+const engineFor = provider => CUSTOM_ID.test(provider) ? Chat : engine(provider);
 
 const engine = provider => {
  if (provider === 'anthropic') return Claude;
@@ -45,15 +64,16 @@ async function start(sender, id, request) {
  const send = data => { if (!sender.isDestroyed()) sender.send('llm:event', { id, ...data }); };
  console.log(`[LLM:start] Provider: ${request?.provider}, Model: ${request?.model}`);
  try {
-  if (!PROVIDERS.has(request?.provider)) throw new Error('Unknown provider');
+  if (!known(request?.provider)) throw new Error('Unknown provider');
+  const custom = customProviders.get(request.provider);
   const isKimchi = request.provider === 'kimchi';
   const isCommandCode = request.provider === 'commandcode';
-  const result = await engine(request.provider).stream(request, {
+  const result = await engineFor(request.provider).stream(request, {
    signal: controller.signal,
    onEvent: send,
    chatgpt: ChatGPT.credentials,
    version: app.getVersion(),
-   apiUrl: isKimchi ? (request.apiUrl || KIMCHI_CONFIG.apiUrl) : isCommandCode ? (request.apiUrl || COMMANDCODE_CONFIG.apiUrl) : undefined,
+   apiUrl: custom?.baseUrl || (isKimchi ? KIMCHI_CONFIG.apiUrl : isCommandCode ? COMMANDCODE_CONFIG.apiUrl : undefined),
    headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined,
    extraBody: isKimchi ? KIMCHI_CONFIG.extraBody : isCommandCode ? COMMANDCODE_CONFIG.extraBody : undefined,
   });
@@ -71,14 +91,23 @@ async function start(sender, id, request) {
 function register(fromApp) {
  ipcMain.on('llm:start', (event, id, request) => { if (fromApp(event)) start(event.sender, id, request); });
  ipcMain.on('llm:abort', (event, id) => { if (fromApp(event)) runs.get(id)?.abort(); });
+ ipcMain.handle('llm:custom-providers', (event, list) => {
+  if (!fromApp(event)) return false;
+  const next = cleanCustomProviders(list);
+  if (!next) return false;
+  customProviders.clear();
+  for (const [id, item] of next) customProviders.set(id, item);
+  return true;
+ });
  ipcMain.handle('llm:models', async (event, provider, key, apiUrl) => {
-  if (!fromApp(event) || !PROVIDERS.has(provider)) return { models: [] };
+  if (!fromApp(event) || !known(provider)) return { models: [] };
+  const custom = customProviders.get(provider);
   const isKimchi = provider === 'kimchi';
   const isCommandCode = provider === 'commandcode';
   try {
    return {
-    models: await engine(provider).models(
-     { provider, key, apiUrl: isKimchi ? (apiUrl || KIMCHI_CONFIG.apiUrl) : isCommandCode ? (apiUrl || COMMANDCODE_CONFIG.apiUrl) : undefined, headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined, preset: isKimchi ? KIMCHI_CONFIG.preset : isCommandCode ? COMMANDCODE_CONFIG.preset : undefined },
+    models: await engineFor(provider).models(
+     { provider, key, apiUrl: custom?.baseUrl || (isKimchi ? KIMCHI_CONFIG.apiUrl : isCommandCode ? COMMANDCODE_CONFIG.apiUrl : undefined), headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined, preset: isKimchi ? KIMCHI_CONFIG.preset : isCommandCode ? COMMANDCODE_CONFIG.preset : undefined },
      { chatgpt: ChatGPT.credentials, version: app.getVersion() }
     )
    };

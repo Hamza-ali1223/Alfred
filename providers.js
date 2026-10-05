@@ -38,7 +38,7 @@ async function viaMain(config, { messages, tools, signal, onReasoning, onContent
  const id = `llm-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
  const request = {
   provider: config.provider, key: config.key, model: config.model, effort: config.effort, vision: config.vision,
-  thinking: config.thinking, output: config.output, apiUrl: config.apiUrl || (config.provider === 'kimchi' ? 'https://llm.kimchi.dev/openai/v1' : config.provider === 'commandcode' ? 'http://127.0.0.1:8787/v1' : undefined), messages, tools, maxTokens, session, once,
+  thinking: config.thinking, output: config.output, apiUrl: config.apiUrl || (config.provider === 'kimchi' ? 'https://llm.kimchi.dev/openai/v1' : config.provider === 'commandcode' ? 'http://127.0.0.1:8787/v1' : undefined), promptCacheKey: config.promptCacheKey, messages, tools, maxTokens, session, once,
  };
  return new Promise((resolve, reject) => {
   const partial = { content: '', reasoning: '', toolCalls: [], finishReason: null, usage: null };

@@ -26,6 +26,16 @@ function convert(messages, vision) {
  return out;
 }
 
+function cacheUsage(usage = {}) {
+ const details = usage.prompt_tokens_details || usage.input_tokens_details || {};
+ const cached = usage.cached_tokens ?? usage.prompt_cache_hit_tokens ?? usage.cache_read_input_tokens ?? details.cached_tokens ?? details.cache_read_tokens;
+ const written = usage.written_tokens ?? usage.cache_creation_input_tokens ?? usage.cache_write_tokens ?? details.cache_write_tokens ?? details.cache_creation_tokens;
+ const normalized = {};
+ if (Number.isFinite(cached) && cached >= 0) normalized.cached_tokens = cached;
+ if (Number.isFinite(written) && written >= 0) normalized.written_tokens = written;
+ return normalized;
+}
+
 const error = (message, status = 0, code = '') => Object.assign(new Error(message), { status, code });
 
 async function failure(response) {
@@ -96,7 +106,7 @@ async function* events(body) {
 
 async function stream(request, context) {
  const { model, key, messages, tools, maxTokens, vision = true } = request;
- const { signal, onEvent = () => {}, apiUrl = 'https://llm.kimchi.dev/openai/v1', headers = {}, extraBody = {} } = context;
+ const { signal, onEvent = () => {}, apiUrl = 'https://llm.kimchi.dev/openai/v1', headers = {}, extraBody = {}, promptCacheKey = false } = context;
  const body = {
   model,
   messages: convert(messages, vision),
@@ -106,6 +116,7 @@ async function stream(request, context) {
   ...(extraBody || {}),
  };
  if (tools?.length) { body.tools = tools; body.tool_choice = 'auto'; }
+ if (promptCacheKey && request.session) body.prompt_cache_key = request.session;
  const reqHeaders = {
   ...(key ? { Authorization: `Bearer ${key}` } : {}),
   'Content-Type': 'application/json',
@@ -152,11 +163,11 @@ async function stream(request, context) {
    }
    if (choice.finish_reason) result.finishReason = choice.finish_reason;
   }
-  if (event.usage) result.usage = { prompt_tokens: event.usage.prompt_tokens || 0, completion_tokens: event.usage.completion_tokens || 0, total_tokens: event.usage.total_tokens || 0 };
+  if (event.usage) result.usage = { prompt_tokens: event.usage.prompt_tokens || 0, completion_tokens: event.usage.completion_tokens || 0, total_tokens: event.usage.total_tokens || 0, ...cacheUsage(event.usage) };
  }
  result.toolCalls = [...calls.entries()].sort((a, b) => a[0] - b[0]).map(([, call]) => ({ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } }));
  if (!result.finishReason) result.finishReason = result.toolCalls.length ? 'tool_calls' : 'stop';
  return result;
 }
 
-module.exports = { models, stream, convert, text, parts };
+module.exports = { models, stream, convert, text, parts, cacheUsage };

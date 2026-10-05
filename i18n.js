@@ -253,6 +253,7 @@ const STRINGS = {
   'settings.custom.name': 'Provider name',
   'settings.custom.baseUrl': 'Base URL ending in /v1',
   'settings.custom.models': 'Model IDs, comma-separated',
+  'settings.custom.cacheKey': 'Send a stable prompt_cache_key hint (only if this endpoint supports it)',
   'settings.custom.key': 'Bearer API key',
   'settings.custom.keyHint': 'Sent as Authorization: Bearer <key>.',
   'settings.custom.refresh': 'Check connection and refresh models',

@@ -2,9 +2,9 @@
 'use strict';
 
 const STORAGE = { effort: 'deepseek.effort', mode: 'openghost.mode', model: 'openghost.model', catalog: 'openghost.catalog', customProviders: 'openghost.customProviders' };
-const KEYS = { openai: 'openai.apiKey', anthropic: 'anthropic.apiKey', kimchi: 'kimchi.apiKey', deepseek: 'deepseek.apiKey', commandcode: 'commandcode.apiKey' };
+const KEYS = { openai: 'openai.apiKey', anthropic: 'anthropic.apiKey', kimchi: 'kimchi.apiKey', deepseek: 'deepseek.apiKey', commandcode: 'commandcode.apiKey', openrouter: 'openrouter.apiKey' };
 // The order providers appear in, in the settings and in the model picker.
-const ORDER = ['chatgpt', 'openai', 'anthropic', 'kimchi', 'deepseek', 'commandcode'];
+const ORDER = ['chatgpt', 'openai', 'anthropic', 'kimchi', 'deepseek', 'commandcode', 'openrouter'];
 // The provider the app starts with: the settings ask for its key when nothing is connected, and new chats take its first
 // model until the user picks another.
 const FIRST_PROVIDER = 'deepseek';
@@ -19,7 +19,9 @@ const LINKS = {
  kimchi: ['https://llm.kimchi.dev', 'llm.kimchi.dev'],
  deepseek: ['https://platform.deepseek.com/api_keys', 'platform.deepseek.com'],
  commandcode: ['https://commandcode.ai/settings', 'commandcode.ai'],
+ openrouter: ['https://openrouter.ai/keys', 'openrouter.ai'],
 };
+const PLACEHOLDERS = { anthropic: 'sk-ant-…', openrouter: 'sk-or-…' };
 const KNOWN_KIMCHI = [
  { id: 'kimchi:deepseek-v4-flash-0731', api: 'deepseek-v4-flash-0731', provider: 'kimchi', name: 'DeepSeek V4 Flash', context: 1000000, vision: false },
  { id: 'kimchi:kimi-k2.7', api: 'kimi-k2.7', provider: 'kimchi', name: 'Kimi K2.7', context: 262144, vision: true },
@@ -54,7 +56,7 @@ function keyRow(provider) {
    </div>
    <div class="settings-control">
     <div class="settings-key-box">
-     <input id="settings-key-${provider}" class="settings-key" data-provider="${provider}" type="password" placeholder="${provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}" autocomplete="off" spellcheck="false">
+     <input id="settings-key-${provider}" class="settings-key" data-provider="${provider}" type="password" placeholder="${PLACEHOLDERS[provider] || 'sk-…'}" autocomplete="off" spellcheck="false">
      <button type="button" class="settings-key-eye" aria-label="${escapeHtml(I18n.t('settings.key.show'))}" aria-pressed="false">${Glyphs.eye}</button>
     </div>
     <p class="settings-status" data-provider="${provider}" role="status"></p>
@@ -199,7 +201,7 @@ class Settings {
  readCatalog() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE.catalog)) || {}; } catch {}
-  return { chatgpt: [], openai: [], anthropic: [], kimchi: KNOWN_KIMCHI.slice(), deepseek: [], commandcode: KNOWN_COMMANDCODE.slice(), ...saved };
+  return { chatgpt: [], openai: [], anthropic: [], kimchi: KNOWN_KIMCHI.slice(), deepseek: [], commandcode: KNOWN_COMMANDCODE.slice(), openrouter: [], ...saved };
  }
 
  readCustomProviders() {
@@ -317,6 +319,8 @@ class Settings {
    effort,
    efforts,
    vision: model?.vision !== false,
+   // A model that calls no tools is talked to as a plain chat.
+   tools: model?.tools !== false,
    thinking: model?.thinking,
    output: model?.output,
   };
@@ -505,6 +509,7 @@ class Settings {
   section('kimchi', 'Kimchi', keyRow('kimchi')),
   section('deepseek', 'DeepSeek', keyRow('deepseek')),
   section('commandcode', 'Command Code', keyRow('commandcode')),
+  section('openrouter', 'OpenRouter', keyRow('openrouter')),
   ...this.customProviders.map(provider => this.customSection(provider)),
   `<button type="button" class="settings-button custom-provider-add" data-action="add">${escapeHtml(I18n.t('settings.custom.add'))}</button>`,
  ].join('');

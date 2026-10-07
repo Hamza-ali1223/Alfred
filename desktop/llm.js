@@ -1,12 +1,13 @@
 'use strict';
 
-// Requests to OpenAI and Anthropic run here in the main process: the Codex backend and the ChatGPT sign-in are out of reach of the page.
+// Requests to OpenAI, Anthropic and OpenRouter run here in the main process: the Codex backend and the ChatGPT sign-in are out of reach of the page.
 // The page starts a run by id and gets its deltas, then the result or the error, back as events.
 const { app, ipcMain } = require('electron');
 const OpenAI = require('./openai');
 const Claude = require('./anthropic');
 const ChatGPT = require('./chatgpt');
 const Chat = require('./chatcompletions');
+const OpenRouter = require('./openrouter');
 
 const KIMCHI_MODELS = [
  { id: 'deepseek-v4-flash-0731', name: 'DeepSeek-V4-Flash-0731', context: 1048576, vision: false },
@@ -31,7 +32,7 @@ const COMMANDCODE_CONFIG = {
 };
 
 const runs = new Map();
-const PROVIDERS = new Set(['openai', 'chatgpt', 'anthropic', 'kimchi', 'commandcode']);
+const PROVIDERS = new Set(['openai', 'chatgpt', 'anthropic', 'openrouter', 'kimchi', 'commandcode']);
 const CUSTOM_ID = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const customProviders = new Map();
 
@@ -55,6 +56,7 @@ const engineFor = provider => CUSTOM_ID.test(provider) ? Chat : engine(provider)
 const engine = provider => {
  if (provider === 'anthropic') return Claude;
  if (provider === 'kimchi' || provider === 'commandcode') return Chat;
+ if (provider === 'openrouter') return OpenRouter;
  return OpenAI;
 };
 
@@ -114,6 +116,15 @@ function register(fromApp) {
    };
   } catch (error) {
    return { error: { status: error.status || 0, code: error.code || '', message: error.message } };
+  }
+ });
+ // What a provider tells of the account behind a key, where it tells anything.
+ ipcMain.handle('llm:account', async (event, provider, key) => {
+  if (!fromApp(event) || typeof engine(provider)?.account !== 'function') return null;
+  try {
+   return { account: await engine(provider).account({ provider, key }) };
+  } catch (error) {
+   return { error: error.message, status: error.status || 0 };
   }
  });
  const auth = action => async event => {

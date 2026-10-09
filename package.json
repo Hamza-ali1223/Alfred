@@ -1,7 +1,7 @@
 {
   "name": "openghost",
   "productName": "OpenGhost",
-  "version": "1.4.0",
+  "version": "1.4.5",
   "private": true,
   "description": "OpenGhost",
   "main": "desktop/main.js",
@@ -50,7 +50,8 @@
       "icon": "desktop/icon.png",
       "category": "public.app-category.utilities",
       "artifactName": "OpenGhost-${version}-mac.${ext}",
-      "identity": null,
+      "identity": "-",
+      "hardenedRuntime": false,
       "extendInfo": {
         "NSDesktopFolderUsageDescription": "The agent works with the files in this place when you ask it to.",
         "NSDocumentsFolderUsageDescription": "The agent works with the files in this place when you ask it to.",

@@ -62,6 +62,7 @@ const engine = provider => {
 
 async function start(sender, id, request) {
  const controller = new AbortController();
+ controller.sender = sender;
  runs.set(id, controller);
  const send = data => { if (!sender.isDestroyed()) sender.send('llm:event', { id, ...data }); };
  console.log(`[LLM:start] Provider: ${request?.provider}, Model: ${request?.model}`);
@@ -154,4 +155,9 @@ function cancelAll() {
  ChatGPT.cancel();
 }
 
-module.exports = { register, cancelAll };
+// Stops what one window asked for, when that window is gone and another goes on working.
+function cancelFrom(sender) {
+ for (const controller of runs.values()) if (controller.sender === sender) controller.abort();
+}
+
+module.exports = { register, cancelAll, cancelFrom };

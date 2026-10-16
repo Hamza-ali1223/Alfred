@@ -10,6 +10,14 @@ const FINISH_NOTES = ['length', 'content_filter', 'insufficient_system_resource'
 const LEAVE = { duration: 260, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' };
 const SWITCH = { duration: 280, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' };
 const PIN_TIME = 2000;
+// A chat opened for the first time is laid out out of sight and shown once it stands still: `calm` frames in a row
+// with its height unchanged and its pictures in, or after `most` at the latest. A wait that lasts longer than `wait`
+// (the chat still being read from the disk, or still settling) shows the ghost in the meantime.
+const HOLD = { calm: 3, most: 1500, wait: 220 };
+// A long chat opens with its last screens drawn. An older reply waits as its bare words, put aside (thread-window.js)
+// at a height guessed from them, and is drawn when the chat is scrolled near it. `screens`: how much of the end is
+// drawn at once; the guess: a line of so many letters, so tall, and room for what stands between paragraphs.
+const LATER = { screens: 3, letters: 70, line: 26, gap: 14, least: 60 };
 // How far below the top of the chat a card too tall for the room over the composer keeps its top: where the first message sits.
 const ANCHOR_GAP = 56;
 // The chat on screen keeps its messages under the lock screen while it frosts over (FROST in lock-ui.js), then lets them go.
@@ -24,6 +32,7 @@ const COMPACT = {
  prompt: 'You compress a long conversation between a user and OpenGhost, an AI agent working on the user\'s computer, so the work can go on without the original messages. Write a dense summary in the language of the user\'s own messages in it (English when they write in English, never a language they did not use), with these parts: the user\'s goals and preferences; key facts, decisions and constraints; what has been done, with file paths, commands and their results, commits; the current state and open problems; the exact next steps. Keep names, paths, numbers, versions and code identifiers exact. Leave out small talk and whatever no longer matters.',
  head: 'The earlier part of this conversation was compacted to save context. Your tools, formatting rules and browser instructions still apply; this summary does not replace them. Summary of it:',
  resume: 'Go on with the task from where you stopped, using the summary above.',
+ skills: 'This message comes from the app, not from the user. These skills were in use before the summary; their instructions still hold, word for word:',
  kept: 'This message comes from the app, not from the user. The summary above covers the whole conversation so far. Its last steps follow here once more, word for word, with their full tool results, so nothing of them has to be looked up again.',
  // The last steps stay as they were while they take no more than this share of the model's window, nor this many tokens.
  share: 0.2,
@@ -51,9 +60,15 @@ const TOOL_NOTES = {
  memoryOff: '- The user has switched the memory off: nothing is remembered and nothing can be saved until they switch it on again.',
  pad: 'This note comes from the app, not from the user: the user\'s notepad, as it stands now.',
  padEmpty: '- The notepad is empty.',
+ routines: 'This note comes from the app, not from the user: the routines of this chat, as they stand now.',
+ routinesNone: '- This chat has no routines now.',
  peers: 'This note comes from the app, not from the user: who else is at work in this folder right now.',
  peersRule: 'Leave their files and their tasks to them: do not do the same work twice. A change to a file one of them is changing is refused while it works. Commands and git are not checked, so keep those clear of their files too, and do not commit, move or revert their work.',
  peersNone: '- Nobody else is at work here now.',
+ skills: 'This note comes from the app, not from the user: the skills you can use, as they stand now. Load one with the skill tool when a task fits it.',
+ skillsNone: '- No skills are set up now.',
+ picked: 'This comes from the app, not from the user: the user picked these skills for this message with /name, and their instructions follow. They are the user\'s choice for this task: work by them alone and load no other skill for it.',
+ pickedAgain: 'The user picked a skill whose instructions are already above in this conversation; use it for this message:',
 };
 // The agents at work right now, each with the files it has changed in this turn. Two agents can work in one folder at the
 // same time (a chat's and its mini chat's, or two chats of one folder): each is told of the others in a note, and a file
@@ -83,6 +98,13 @@ const Desk = {
  },
 };
 const TASK_SHOWN = 220;
+// What the agent's question to the user answers when no answer came (ask-card.js shows the question).
+const ASK = {
+ bad: 'Error: ask_user needs questions: one to four, each with a question, a short header and two to four options that have a label and a description. Call it again in that shape, or go on without asking.',
+ message: 'The user did not answer the question and sent a new message instead, read it next.',
+ side: 'Error: no question can be shown here right now. Go on without asking: choose what is most sensible and say what you chose.',
+};
+
 // The user's notepad beside a chat (notepad.js), and what the agent's notepad tool answers.
 const PAD = {
  max: 1000,
@@ -96,6 +118,26 @@ const PAD = {
  action: 'Error: action must be remind, done or add.',
  elsewhere: 'Error: the notepad belongs to the main conversation. From the mini chat it can only be read.',
 };
+// What the agent's routine tool answers, and the message that gives it a routine when one is due (routines.js).
+const ROUTINE = {
+ clock: () => `The time on the computer now: ${stamp(Date.now())}.`,
+ added: item => `Set up as ${item.id}: ${Routines.english(item.rule)}; it runs first ${stamp(item.next)}. The user sees it in the chat and on the Routines button at the top of it, so there is no need to list it.`,
+ changed: item => `${item.id} now runs ${Routines.english(item.rule)}${item.paused ? ' (paused)' : item.next ? `; next ${stamp(item.next)}` : ''}. Its task: "${item.text}".`,
+ paused: item => `${item.id} is paused: it does not run until it is resumed.`,
+ resumed: item => `${item.id} runs again; next ${stamp(item.next)}.`,
+ removed: item => `${item.id} is removed.`,
+ run: (item, at) => `This message comes from the app, not from the user: it is time for the routine ${item.id} of this chat (${Routines.english(item.rule)}), at ${stamp(at)}. Do it now, as the instructions under Routines say. The task:\n${item.text}`,
+ none: id => `Error: this chat has no routine ${id || 'with that id'}.`,
+ empty: 'Error: text is empty: say what to do each time.',
+ when: 'Error: when is missing or wrong. Give kind, and for once at (YYYY-MM-DDTHH:MM) or in_minutes; for every minutes; for daily, weekly and monthly time (HH:MM); for weekly days; for monthly day.',
+ past: 'Error: that moment has passed. Give a time ahead.',
+ full: 'Error: there are too many routines already. Ask the user which one to remove first.',
+ action: 'Error: action must be add, edit, pause, resume or remove.',
+ locked: 'Error: this chat is protected by a password, and a routine cannot run in it while it is locked. Tell the user to set the routine up in a chat without a password.',
+ elsewhere: 'Error: routines belong to the main conversation. From the mini chat they can only be read.',
+ failed: 'Error: the app could not keep the routine. Tell the user.',
+};
+const stamp = time => new Date(time).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 // What the agent's memory tool answers (memory.js keeps the memory itself).
 const MEMORY = {
  saved: (id, text) => `Remembered as ${id}: "${text}". The app tells the user in the chat that the memory was updated, so there is no need to say it.`,
@@ -107,6 +149,15 @@ const MEMORY = {
  off: 'Error: the user has switched the memory off, so nothing can be saved or changed. Go on without it.',
  locked: 'Error: this chat is protected by a password, and nothing said in it goes into the memory that every chat reads. Go on without saving.',
  full: 'Error: the memory is full. Put what is new into the record it belongs to with update, or forget a record that no longer matters.',
+};
+// What the agent's skill tool answers (skills.js and desktop/skills.js find, read and put in the skills).
+const SKILL = {
+ added: (skill, updated) => `${updated ? 'Updated' : 'Added'} the skill ${skill.name}: ${skill.description}\nIt is in ${skill.dir} and is ready in every chat from now on.${skill.scripts ? ' It comes with scripts: they run with your usual tools and ask the user as any command does.' : ''}${skill.compatibility ? ` It says it needs: ${skill.compatibility}` : ''} The app shows the user a mark of it in the chat. Load it with action use when a task fits it.`,
+ already: name => `The instructions of the skill ${name} are already above in this conversation: follow them.`,
+ none: name => `Error: there is no skill ${name ? `called ${name}` : 'with that name'}. The skills there are:`,
+ noLink: 'Error: add needs url, the link to the skill.',
+ action: 'Error: action must be use or add.',
+ declined: name => `The user did not add the skill ${name}: it was not put in. Don't add it again unless they ask.`,
 };
 const FORMAT_GUIDE = [
  'Format replies in Markdown; the app renders it richly and draws live, editable charts and diagrams.',
@@ -187,7 +238,7 @@ const FORMAT_GUIDE = [
  '    footer North',
  '      links Contacts, Privacy',
  '- Show files and folders as a files block, never as a text list, a table or an ASCII tree: whenever you show what is in a folder, the downloads, a project and its structure, or files you found or made.',
- '  Fence it like every diagram, as a ```mermaid block whose first line is files, then title <folder name>, path <full path>, then one line per entry: name | size | modified, the newest or most relevant first.',
+ '  Fence it like every diagram, as a ```mermaid block whose first line is files, then title <folder name>, path <full path, exactly as it is on the disk: the one your tools showed, never guessed>, then one line per entry: name | size | modified, the newest or most relevant first.',
  '  End a folder\'s name with / and give what it holds (12 items) when you know it; indent entries under their folder to show a tree. Copy sizes and dates from the listing (2.4 MB, 2026-09-27 14:05).',
  '  Show at most 30 entries and add a line more <number> for the rest. The app draws the folder with file icons and what takes the space, so after the block say only what stands out, don\'t list the files again.',
  '  Example, with its fence:',
@@ -226,6 +277,13 @@ const VISUAL_CHECK = [
 const VISUAL_NUDGE = new Set(['openai', 'chatgpt']);
 
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// The sheets of the mark a summary leaves in the chat (compactNotice), the narrowest on top.
+const STACK = '<span class="thread-compact-stack" aria-hidden="true"><i></i><i></i><i></i></span>';
+// "1 message", "24 messages", in the form the app's language has for that number.
+const messagesCount = n => {
+ const key = `compact.count.${new Intl.PluralRules(I18n.lang).select(n)}`;
+ return I18n.t(I18n.has(key) ? key : 'compact.count.other', { n });
+};
 const attr = text => text.replace(/[&"<\n]/g, c => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '\n': ' ' })[c]);
 const samePath = (a, b) => Library.samePath(a, b);
 
@@ -495,7 +553,7 @@ class Conversation {
 }
 
 class Chat {
- constructor({ main, thread, bottom, settings, library, onChange, onList, onRecall = null, onNotes = null, onLeave = null }) {
+ constructor({ main, thread, bottom, settings, library, onChange, onList, onRecall = null, onNotes = null, onLeave = null, onPredict = null }) {
   this.main = main;
   this.thread = thread;
   this.bottom = bottom;
@@ -507,6 +565,8 @@ class Chat {
   this.onNotes = onNotes;
   // Told of a chat about to leave the screen or to lock, while its key is still at hand.
   this.onLeave = onLeave;
+  // Told when a chat's prediction of the next message has come or gone; a chat with nobody to tell asks for none.
+  this.onPredict = onPredict;
   this.conversations = new Map();
   this.nodes = new WeakMap();
   this.active = null;
@@ -523,11 +583,16 @@ class Chat {
   this.jumpFrame = 0;
   this.followStep = this.followStep.bind(this);
   this.pinUntil = 0;
-  this.resize = new ResizeObserver(() => {
+  const resized = () => {
    if (this.follow && this.busy) this.followBottom();
    else if (this.follow && performance.now() < this.pinUntil) this.pin();
    this.syncBottom();
-  });
+  };
+  this.resize = new ResizeObserver(resized);
+  // While a reply of the chat on screen is being written out, the chat glides after it to its end by itself.
+  window.ThreadWindow?.follow(thread, () => this.follow && !!this.active?.list?.querySelector(':scope > .is-streaming'));
+  // The room under the list is the composer's (composer-space.js): it grows and shrinks without the list changing size.
+  main.addEventListener('composer-space', resized);
   thread.addEventListener('scroll', () => this.onScroll());
   thread.addEventListener('click', event => this.onClick(event));
   thread.addEventListener('diagram-edit', event => this.onDiagramEdit(event));
@@ -680,11 +745,58 @@ class Chat {
    if (this.library.isLocked(id)) conv.locked = true;
    else conv.ready = this.load(conv);
   }
+  // A chat that takes its time to be read does not leave the old one standing as if nothing was asked.
+  const slow = conv.ready && setTimeout(() => { if (token === this.opening) this.showWait(true); }, HOLD.wait);
   return Promise.resolve(conv.ready).then(() => {
+   clearTimeout(slow);
    if (token !== this.opening) return;
    this.activate(conv);
    this.onChange();
   });
+ }
+
+ // The ghost in the middle of the chat while a chat is on its way; what is on screen meanwhile steps back.
+ showWait(on) {
+  if (on === !!this.waitEl) return;
+  this.main.classList.toggle('is-waiting', on);
+  if (on) {
+   this.waitEl = document.createElement('div');
+   this.waitEl.className = 'thread-wait';
+   this.waitEl.innerHTML = '<ghost-thinking></ghost-thinking>';
+   this.thread.after(this.waitEl);
+   return;
+  }
+  this.waitEl.remove();
+  this.waitEl = null;
+ }
+
+ // A chat shown for the first time stays out of sight until it stands still: its drawings are laid out for the width
+ // they now have, its pictures are in and its long messages are folded. Then it comes, already at its place.
+ hold(conv, show) {
+  const list = conv.list, started = performance.now();
+  let height = -1, calm = 0;
+  const pictures = () => [...list.querySelectorAll('img')].every(img => img.complete || img.loading === 'lazy');
+  list.classList.add('is-settling');
+  const step = () => {
+   if (this.active !== conv) { list.classList.remove('is-settling'); return; }
+   const now = list.offsetHeight, waited = performance.now() - started;
+   calm = now === height ? calm + 1 : 0;
+   height = now;
+   if (conv.follow) this.pin();
+   else this.thread.scrollTop = conv.scrollTop;
+   this.lastTop = this.thread.scrollTop;
+   if ((calm >= HOLD.calm && pictures()) || waited > HOLD.most) {
+    list.classList.remove('is-settling');
+    conv.seen = true;
+    this.showWait(false);
+    show();
+    this.syncBottom();
+    return;
+   }
+   if (waited > HOLD.wait) this.showWait(true);
+   requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
  }
 
  // A chat's messages come with the notes kept beside it; a mini chat has none of its own.
@@ -814,8 +926,10 @@ class Chat {
    if (prev.record && !prev.locked && this.library.isProtected(prev.id)) this.seal(prev);
   }
   this.attach(conv);
+  this.syncForks(conv);
   this.active = conv;
   conv.unread = false;
+  queueMicrotask(() => window.Notify?.look());
   // Once the chat is on screen: the list is drawn again when the mark goes.
   if (conv.record?.unread) queueMicrotask(() => this.library.update(conv.id, { unread: false }));
   conv.list.classList.remove('is-parked');
@@ -827,7 +941,14 @@ class Chat {
   else this.thread.scrollTop = conv.scrollTop;
   this.lastTop = this.thread.scrollTop;
   this.pinUntil = performance.now() + PIN_TIME;
-  if (prev?.list.childElementCount && !empty && !reducedMotion()) conv.list.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], SWITCH);
+  const show = () => { if (prev?.list.childElementCount && !empty && !reducedMotion()) conv.list.animate([{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], SWITCH); };
+  // Seen before, empty, or being written into right now: it is there at once.
+  if (empty || conv.seen || conv.turn || conv.locked) {
+   if (!conv.locked) conv.seen = true;
+   this.showWait(false);
+   show();
+  } else this.hold(conv, show);
+  this.syncAsk();
   this.syncBottom();
  }
 
@@ -852,6 +973,7 @@ class Chat {
  send(text, attachments = []) {
   const conv = this.active, config = this.config(conv);
   if (conv.locked) return false;
+  this.forget(conv, true);
   this.anchor = null;
   if (!config.ready) {
    this.settings.open(I18n.t('settings.key.needed'), config.provider);
@@ -893,6 +1015,8 @@ class Chat {
   turn.release?.('abort');
   if (turn.tool) AgentTools.cancel(turn.tool);
   for (const pending of turn.approvals) pending.card.settle('deny');
+  turn.skillCard?.settle('deny');
+  conv.ask?.settle(TOOL_NOTES.cancelled);
  }
 
  onModeChange() {
@@ -997,6 +1121,9 @@ class Chat {
  }
 
  async onClick(event) {
+  const fork = event.target.closest('.message-fork'), back = event.target.closest('.thread-fork-name');
+  if (fork) { this.forkAt(fork.closest('.message')); return; }
+  if (back) { this.open(back.dataset.chat); return; }
   const button = event.target.closest('.md-copy');
   if (!button) return;
   const own = button.classList.contains('message-copy');
@@ -1050,8 +1177,25 @@ class Chat {
 
  // The message as the model gets it, once every attachment is read; a video's place and frame are known only then.
  async compose(conv, entry, prompt) {
-  entry.content = await userContent(prompt, this.agent(conv));
+  entry.content = await this.withSkills(conv, await userContent(prompt, this.agent(conv)), prompt.text);
   entry.attachments = prompt.attachments.map(slim);
+ }
+
+ // The skills the user picked with /name go to the model at the head of their message, with their instructions; one
+ // already in the conversation is only named again.
+ async withSkills(conv, content, text) {
+  const folder = this.cwd(conv), names = Skills.mentions(text, folder);
+  if (!names.length) return content;
+  const had = Skills.loaded(this.history(conv)), fresh = [], again = [];
+  for (const name of names) {
+   if (had.has(name)) { again.push(name); continue; }
+   const block = await Skills.content(name, folder).catch(() => null);
+   if (block) fresh.push(block);
+  }
+  const head = [...(fresh.length ? [TOOL_NOTES.picked, ...fresh] : []), ...(again.length ? [`${TOOL_NOTES.pickedAgain} ${again.join(', ')}.`] : [])].join('\n\n');
+  if (!head) return content;
+  if (typeof content === 'string') return `${head}\n\n${content}`;
+  return [{ type: 'text', text: head }, ...content];
  }
 
  // Where the videos and the PDFs the user attached to the chat lie on the disk, each kind apart: the agent may watch
@@ -1081,6 +1225,7 @@ class Chat {
   QueuedRing.put(bubble, { edit: () => this.withdraw(conv, bubble, true), remove: () => this.withdraw(conv, bubble) });
   this.dismissGhost(turn.part.view);
   for (const pending of turn.approvals) pending.card.settle(TOOL_NOTES.message);
+  conv.ask?.settle(ASK.message);
   turn.release?.('message');
  }
 
@@ -1195,19 +1340,28 @@ class Chat {
    const lines = this.padLines(conv), had = told(TOOL_NOTES.pad), pad = lines || had ? `${TOOL_NOTES.pad}\n${lines || TOOL_NOTES.padEmpty}` : '';
    if (pad && pad !== had) out.push({ role: 'user', content: pad });
   }
+  // The chat's routines, the same way: none gets no note, unless an earlier note named some.
+  if (this.routinable(conv)) {
+   const lines = Routines.lines(conv.id), had = told(TOOL_NOTES.routines), note = lines || had ? `${TOOL_NOTES.routines}\n${lines || TOOL_NOTES.routinesNone}` : '';
+   if (note && note !== had) out.push({ role: 'user', content: note });
+  }
   // What is remembered of the user from all chats, the same way; switched off, a chat that was told of it is told so.
   const kept = Memory.on ? Memory.lines() : '', known = told(TOOL_NOTES.memory);
   const memory = kept || known ? `${TOOL_NOTES.memory}\n${kept || (Memory.on ? TOOL_NOTES.memoryEmpty : TOOL_NOTES.memoryOff)}` : '';
   if (memory && memory !== known) out.push({ role: 'user', content: memory });
+  // The skills the agent can use, the same way: none gets no note, unless an earlier note named some.
+  const skills = Skills.lines(this.cwd(conv)), listed = told(TOOL_NOTES.skills), shelf = skills || listed ? `${TOOL_NOTES.skills}\n${skills || TOOL_NOTES.skillsNone}` : '';
+  if (shelf && shelf !== listed) out.push({ role: 'user', content: shelf });
   // Other agents at work in the same folder, the same way: nobody gets no note, unless an earlier note named somebody.
   const lines = this.peerLines(conv), named = told(TOOL_NOTES.peers), peers = lines || named ? `${TOOL_NOTES.peers}\n${lines || TOOL_NOTES.peersNone}` : '';
   if (peers && peers !== named) out.push({ role: 'user', content: peers });
   return out;
  }
 
- // The agent that works in a tab of the browser of its own, apart from the one on screen: none for a chat.
+ // The agent that works in a tab of the browser of its own, apart from the one on screen: a chat's agent works in the tab
+ // on screen, unless the agent of another chat is at work there (BrowserPanel.seatOf).
  seat(conv) {
-  return null;
+  return window.browserPanel?.seatOf(conv) || null;
  }
 
  // What this conversation's agent is doing, in the user's own words: the latest thing they asked of it.
@@ -1247,6 +1401,7 @@ class Chat {
   const messages = conv.messages, start = messages.findLastIndex(entry => entry.role === 'compact'), entry = messages[start];
   if (!entry) return flat(messages);
   const out = [{ role: 'system', content: `${COMPACT.head}\n\n${entry.summary}` }];
+  if (entry.skills) out.push({ role: 'user', content: `${COMPACT.skills}\n\n${entry.skills}` });
   if (entry.keep) out.push({ role: 'user', content: COMPACT.kept }, ...flat(messages.slice(0, start)).slice(-entry.keep));
   if (entry.resume) out.push({ role: 'user', content: COMPACT.resume });
   return [...out, ...flat(messages.slice(start + 1))];
@@ -1254,6 +1409,7 @@ class Chat {
 
  async request(conv, turn) {
   const part = turn.part, view = part.view, base = part.entry.content;
+  if (this.agent(conv)) await Skills.refresh(this.cwd(conv)).catch(() => {});
   const messages = [...(await this.system(conv)).map(content => ({ role: 'system', content })), ...withPictures(this.history(conv), UserContext.pictures())];
   const notes = this.notes(conv, messages), at = this.seam(conv, messages);
   if (messages[at]) messages[at] = { ...messages[at], cache: true };
@@ -1269,7 +1425,7 @@ class Chat {
     messages,
     tools: this.agent(conv) ? AgentTools.schemas : null,
     signal: turn.controller.signal,
-    session: conv.id,
+    session: this.session(conv),
     onContent: (delta, stream) => {
      if (!stream.content.trim()) return;
      turn.text = true;
@@ -1304,8 +1460,11 @@ class Chat {
   } catch {
    return `Error: the arguments are not valid JSON: ${call.function.arguments.slice(0, 300)}. Call the tool again with valid JSON.`;
   }
-  // The notepad is the app's own: nothing on the computer changes, so it never waits for approval.
+  // The notepad is the app's own: nothing on the computer changes, so it never waits for approval. Nor do routines:
+  // what a routine does when it runs asks for approval then, step by step, as any task does.
   if (name === 'notepad') return this.useNotepad(conv, turn, args);
+  if (name === 'routine') return this.useRoutine(conv, turn, args);
+  if (name === 'ask_user') return this.useAsk(conv, turn, view, args);
   if (name === 'memory') return this.useMemory(conv, turn, args);
   // A file another agent is changing in its own turn is that agent's until it is done.
   if (name === 'write_file' || name === 'edit_file') {
@@ -1316,22 +1475,23 @@ class Chat {
    }
    if (path) Desk.claim(conv, path, String(args.path));
   }
-  const apart = this.seat(conv);
+  let apart = this.seat(conv);
   if (AgentTools.needsApproval(name, args, { mode: this.settings.mode, cwd, attached: this.attachedFiles(conv), apart })) {
    if (turn.queue.length) return TOOL_NOTES.message;
    const answer = await this.approve(conv, turn, view, { name, args, cwd, apart });
    if (answer !== 'allow') return answer === 'deny' ? TOOL_NOTES.declined : answer;
   }
   if (turn.controller.signal.aborted) return TOOL_NOTES.cancelled;
+  if (name === 'skill') return this.useSkill(conv, turn, view, args);
   this.showGhost(turn.next || view);
   const panel = name.startsWith('browser_') ? window.browserPanel : null;
   // While the user has the browser the agent waits for it: the note to answer with if the wait ended some other way
   // than by Hand back, '' once the browser is the agent's again.
   const yielded = async () => {
-   if (!panel.userHas) return '';
+   if (!panel.userHolds(apart)) return '';
    const why = await new Promise(resolve => {
     turn.release = resolve;
-    panel.waitForAgent().then(() => resolve('back'));
+    panel.waitForAgent(apart).then(() => resolve('back'));
    });
    turn.release = null;
    if (why === 'abort' || turn.controller.signal.aborted) return TOOL_NOTES.cancelled;
@@ -1339,8 +1499,10 @@ class Chat {
   };
   let handed = '';
   if (panel) {
+   // Where it works is settled at its first step in the browser: another chat's agent may have begun there meanwhile.
+   apart = this.seat(conv);
    panel.drive(conv, true, !!apart);
-   if (panel.userHas) {
+   if (panel.userHolds(apart)) {
     const note = await yielded();
     if (note) return note;
     handed = TOOL_NOTES.handedBack;
@@ -1368,12 +1530,50 @@ class Chat {
   }
  }
 
+ // The agent asks the user (the ask_user tool): the composer of this chat turns into the card with the questions
+ // (AskDeck), and the call waits there for as long as the user takes. Stop ends the wait, and so does a new message.
+ async useAsk(conv, turn, view, args) {
+  const questions = AskDeck.clean(args.questions);
+  if (!questions.length) return ASK.bad;
+  if (turn.queue.length) return ASK.message;
+  if (!this.main.querySelector('.composer')) return ASK.side;
+  this.dismissGhost(view);
+  if (turn.next) this.dismissGhost(turn.next);
+  const answers = await new Promise(resolve => {
+   conv.ask = { questions, settle: resolve };
+   this.syncAsk();
+   // Asked in a chat that is not on screen: its row is marked, as for a reply that came in.
+   if (conv !== this.active && conv.record && this.library.chat(conv.id)) this.library.update(conv.id, { unread: true });
+   // The agent now waits for the user: one who is not looking is told so, as of a finished reply.
+   this.replied(conv, I18n.t('notify.asks', { text: questions[0].question }));
+  });
+  conv.ask = null;
+  this.syncAsk();
+  if (typeof answers === 'string') return answers;
+  turn.pills.push({ role: 'asked', items: AskDeck.record(questions, answers) });
+  if (!turn.controller.signal.aborted) this.showGhost(turn.next || view);
+  return AskDeck.report(questions, answers);
+ }
+
+ // The composer shows the question of the chat on screen, if it has one waiting.
+ syncAsk() {
+  const host = this.main.querySelector('.composer');
+  if (!host) return;
+  const ask = this.active?.ask || null;
+  if (!ask && !this.deck) return;
+  this.deck ||= new AskDeck(host);
+  if (ask) this.deck.show(ask);
+  else this.deck.hide();
+ }
+
  async approve(conv, turn, view, request) {
   this.dismissGhost(view);
   if (turn.next) this.dismissGhost(turn.next);
-  const card = new ApprovalCard(AgentTools.describe(request.name, request.args, request.cwd, request.apart));
+  const about = AgentTools.describe(request.name, request.args, request.cwd, request.apart), card = new ApprovalCard(about);
   const pending = { ...request, card };
   view.el.append(card.el);
+  // The agent now waits for the user's OK: one who is not looking is told so, once while its steps wait together.
+  if (!turn.approvals.size) this.replied(conv, I18n.t('notify.approve', { text: about.title }));
   turn.approvals.add(pending);
   if (conv === this.active) this.followBottom();
   const answer = await card.answer;
@@ -1471,6 +1671,65 @@ class Chat {
   if (conv === this.active) this.followBottom();
   // A protected chat left while it was replying locks fully once the reply is saved.
   if (conv.locked && !conv.turn) this.seal(conv);
+  if (!error && !noted && !turn.quiet && text) {
+   this.replied(conv, turn.parts.findLast(part => part.entry.content.trim())?.entry.content || '');
+   this.foresee(conv, turn);
+  }
+ }
+
+ // A finished reply, for the user who may not be looking (notify.js): the chat's key and its name.
+ replied(conv, text) {
+  window.Notify?.replied(`chat:${conv.id}`, this.library.chat(conv.id)?.title || '', text);
+ }
+
+ // The message the user is likely to send next, asked of the chat's model once its answer stands (predictions.js). The
+ // request is the one just made, word for word and with the same cache mark, the answer after it and one message from
+ // the app at the end; nothing of it stays in the chat.
+ async foresee(conv, turn) {
+  if (!this.onPredict || conv.turn || conv.ask || conv.locked || !conv.record) return;
+  // The first exchange of a chat says too little of where it is going.
+  if (conv.messages.filter(entry => entry.role === 'user').length < 2 || !Predictions.due()) return;
+  this.forget(conv);
+  const guess = conv.guess = { controller: new AbortController(), text: '' };
+  try {
+   const messages = [...(await this.system(conv)).map(content => ({ role: 'system', content })), ...withPictures(this.history(conv), UserContext.pictures())];
+   const at = this.seam(conv, messages);
+   if (messages[at]) messages[at] = { ...messages[at], cache: true };
+   messages.push({ role: 'user', content: Predictions.PROMPT });
+   if (conv.guess !== guess || conv.turn) return;
+   const said = await Providers.predict(turn.config, { messages, tools: this.agent(conv) ? AgentTools.schemas : null, signal: guess.controller.signal, session: this.session(conv) });
+   if (conv.guess !== guess || conv.turn) return;
+   guess.text = Predictions.clean(said);
+   if (guess.text) this.onPredict(conv);
+   else conv.guess = null;
+  } catch {
+   if (conv.guess === guess) conv.guess = null;
+  }
+ }
+
+ // A chat's prediction is let go: asked for no longer, shown no longer. `unused`: it was there to be taken and was not.
+ forget(conv, unused = false) {
+  const guess = conv?.guess;
+  if (!guess) return;
+  conv.guess = null;
+  guess.controller.abort();
+  if (guess.text && unused) Predictions.left();
+  if (guess.text) this.onPredict?.(conv);
+ }
+
+ // The prediction for the chat on screen, when there is one to show.
+ get prediction() {
+  const conv = this.active;
+  return conv && !conv.turn && !conv.ask && !conv.locked ? conv.guess?.text || '' : '';
+ }
+
+ // Taken into the message field: it has done its work.
+ takePrediction() {
+  const conv = this.active, text = this.prediction;
+  if (!text) return '';
+  Predictions.used();
+  this.forget(conv);
+  return text;
  }
 
  async compactIfNeeded(conv, turn) {
@@ -1527,35 +1786,56 @@ class Chat {
   }
   const entry = { role: 'compact', summary, resume: middle, model: turn.config.id };
   // Another model takes the chat over from the summary alone: the steps were sized and signed for the one before it.
-  const before = messages.slice(messages.findLastIndex((item, k) => k < at && item.role === 'compact') + 1, at);
+  const from = messages.findLastIndex((item, k) => k < at && item.role === 'compact'), before = messages.slice(from + 1, at);
+  // The skills in use go on past the summary word for word: a summary of their instructions would lose them halfway.
+  const skills = Skills.blocks([...(from >= 0 && messages[from].skills ? [{ content: messages[from].skills }] : []), ...flat(before)]);
+  if (skills) entry.skills = skills;
   const keep = labels ? 0 : tail(flat(before), Math.min(COMPACT.keep, this.settings.windowOf(turn.config.id) * COMPACT.share));
   if (keep) entry.keep = keep;
+  // How many messages of the conversation went into this summary: the mark in the chat says so.
+  entry.count = before.filter(item => item.role === 'user' || item.role === 'assistant').length;
   spend(entry, cost);
   messages.splice(at, 0, entry);
   this.nodes.set(entry, notice);
   // The chat starts anew from the summary: nothing of the requests before it is in the next one.
   conv.sent = 0;
   conv.tokens = estimate([...(await this.system(conv)).map(content => ({ content })), ...this.history(conv)]);
-  this.finishNotice(notice, true);
+  this.finishNotice(notice, true, entry.count);
   this.save(conv);
   return true;
  }
 
- compactNotice(live, labels = null) {
+ // The mark a summary leaves in the chat: sheets put together, seen from their edge, and under them how many messages
+ // went into the summary. While the summary is being written the sheets come down one onto another.
+ compactNotice(live, labels = null, count = 0) {
   const el = document.createElement('div');
   el.className = `thread-compact${live ? ' is-live' : ''}`;
   el.labels = labels;
+  el.innerHTML = STACK;
   const text = document.createElement('span');
   text.className = 'thread-compact-text';
-  text.textContent = live ? labels?.running || I18n.t('compact.running') : I18n.t('compact.done');
   el.append(text);
+  if (live) text.textContent = labels?.running || I18n.t('compact.running');
+  else this.foldedWords(text, count);
   return el;
  }
 
- finishNotice(el, ok) {
+ // "24 messages folded into a summary", the number said a little louder; a summary whose number was not kept says only
+ // that the conversation was compacted.
+ foldedWords(text, count) {
+  if (!count) { text.textContent = I18n.t('compact.done'); return; }
+  const many = document.createElement('b');
+  many.textContent = messagesCount(count);
+  text.replaceChildren(many, ` ${I18n.t('compact.folded')}`);
+ }
+
+ finishNotice(el, ok, count = 0) {
   const text = el.querySelector('.thread-compact-text');
   el.classList.remove('is-live');
-  text.textContent = ok ? el.labels?.done || I18n.t('compact.done') : el.labels?.failed || I18n.t('compact.failed');
+  el.classList.toggle('is-failed', !ok);
+  if (!ok) text.textContent = el.labels?.failed || I18n.t('compact.failed');
+  else if (el.labels?.done) text.textContent = el.labels.done;
+  else this.foldedWords(text, count);
   if (!reducedMotion()) text.animate([{ opacity: 0, filter: 'blur(3px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 360, easing: 'ease-out' });
  }
 
@@ -1639,6 +1919,172 @@ class Chat {
   return PAD.shown(note.text);
  }
 
+ // Whether a conversation keeps routines of its own: a chat does; a mini chat only reads its chat's (see SideChat).
+ routinable(conv) {
+  return Routines.available && !!conv?.record;
+ }
+
+ // The agent's hand on the chat's routines (routines.js): a new one, one changed, paused, started again or taken away.
+ // Each stands in the chat as a pill, and the app keeps them and runs them on time.
+ async useRoutine(conv, turn, args) {
+  if (!this.routinable(conv)) return ROUTINE.elsewhere;
+  if (this.library.isProtected(conv.id)) return ROUTINE.locked;
+  const action = String(args.action || ''), text = String(args.text ?? '').trim(), mark = (kind, item) => turn.pills.push({ role: 'routine', kind, routine: item.id, text: item.text, say: Routines.say(item.rule) });
+  const failed = error => ({ past: `${ROUTINE.past} ${ROUTINE.clock()}`, rule: ROUTINE.when, text: ROUTINE.empty, full: ROUTINE.full }[error] || ROUTINE.failed);
+  if (action === 'add') {
+   if (!text) return ROUTINE.empty;
+   const rule = RoutineRule.clean(args.when);
+   if (!rule) return ROUTINE.when;
+   const { item, error } = await Routines.add({ text, rule, chat: conv.id, own: false, effort: turn.config.effort, by: 'agent' });
+   if (!item) return failed(error);
+   mark('set', item);
+   return `${ROUTINE.added(item)} ${ROUTINE.clock()}`;
+  }
+  if (!['edit', 'pause', 'resume', 'remove'].includes(action)) return ROUTINE.action;
+  const id = String(args.id ?? '').trim().replace(/^\[|\]$/g, ''), item = Routines.of(conv.id).find(one => one.id === id);
+  if (!item) return `${ROUTINE.none(id)} The routines of this chat:\n${Routines.lines(conv.id) || TOOL_NOTES.routinesNone}`;
+  if (action === 'remove') {
+   await Routines.remove(item.id);
+   mark('removed', item);
+   return ROUTINE.removed(item);
+  }
+  const changes = action === 'edit' ? {} : { paused: action === 'pause' };
+  if (action === 'edit') {
+   if (text) changes.text = text;
+   if (args.when) {
+    const rule = RoutineRule.clean(args.when);
+    if (!rule) return ROUTINE.when;
+    changes.rule = rule;
+   }
+   if (!Object.keys(changes).length) return ROUTINE.empty;
+  }
+  const result = await Routines.update(item.id, changes);
+  if (!result.item) return failed(result.error);
+  mark(action === 'edit' ? 'changed' : action === 'pause' ? 'paused' : 'resumed', result.item);
+  return `${(action === 'edit' ? ROUTINE.changed : action === 'pause' ? ROUTINE.paused : ROUTINE.resumed)(result.item)} ${ROUTINE.clock()}`;
+ }
+
+ // A routine the user set up, changed or took away by hand stands in its chat as a pill, as one of the agent's does.
+ // While the agent is at work there it comes after the agent's step, with the agent's own pills.
+ markRoutine(conv, kind, item) {
+  const entry = { role: 'routine', kind, routine: item.id, text: item.text, say: Routines.say(item.rule) };
+  if (conv.turn) { conv.turn.pills.push(entry); return; }
+  conv.messages.push(entry);
+  const el = this.entryView(entry);
+  this.nodes.set(entry, el);
+  this.attach(conv);
+  conv.list.append(el);
+  if (conv === this.active) {
+   this.main.classList.remove('is-empty');
+   this.follow = true;
+   this.followBottom();
+  }
+  RoutinePill.enter(el);
+  // Saved without moving the chat up the list: nothing was said in it.
+  this.library.saveMessages(conv.id, conv.messages, conv.tokens);
+ }
+
+ // The model and effort a routine runs with: the chat's model, and the effort kept with the routine when that model has it.
+ routineConfig(conv, item) {
+  const config = this.config(conv);
+  return item.effort && config.efforts?.includes(item.effort) ? { ...config, effort: item.effort } : config;
+ }
+
+ // A routine is due (the app says so): it runs in its chat, on screen or not, once the work under way there is done.
+ // A sealed chat can be neither read nor written, so a routine of a locked chat waits for its next time.
+ async runRoutine({ id, at }) {
+  await Routines.ready;
+  const item = Routines.find(id), record = item && this.library.chat(item.chat);
+  if (!item) return;
+  if (!record) { Routines.forget(item.chat); return; }
+  if (this.library.isLocked(item.chat)) return;
+  let conv = this.conversations.get(item.chat);
+  if (!conv) {
+   conv = new Conversation(record);
+   this.conversations.set(item.chat, conv);
+   conv.ready = this.load(conv);
+  }
+  if (conv.locked) return;
+  try { await conv.ready; } catch { return; }
+  while (conv.turn) await new Promise(resolve => setTimeout(resolve, 1500));
+  if (!this.library.chat(item.chat) || conv.locked) return;
+  const config = this.routineConfig(conv, item);
+  const entry = { role: 'user', text: item.text, attachments: [], content: ROUTINE.run(item, at), routine: { id: item.id, at } };
+  const el = RoutinePill.build({ kind: 'ran', routine: item.id, at, text: item.text });
+  this.attach(conv);
+  conv.list.append(el);
+  this.nodes.set(entry, el);
+  if (conv === this.active) {
+   this.main.classList.remove('is-empty');
+   this.follow = true;
+  }
+  RoutinePill.enter(el);
+  this.library.update(conv.id, { updated: Date.now() });
+  // Without a model to run on, the chat says so where the reply would stand, as it does for a message.
+  if (!config.ready) {
+   conv.messages.push(entry);
+   this.save(conv);
+   const view = this.assistantMessage(conv);
+   view.el.classList.remove('is-streaming');
+   view.status.remove();
+   conv.list.append(view.el);
+   this.note(view, I18n.t('routine.noModel'));
+   return;
+  }
+  const turn = this.begin(conv, config);
+  conv.messages.push(entry);
+  this.openPart(conv, turn);
+  this.onChange();
+  if (conv === this.active) this.followBottom();
+  await this.drive(conv, turn);
+ }
+
+ // A skill the agent loads, or puts in from a link. Either stands in the chat as a small pill: the user sees which
+ // instructions the agent took up, and what it added for every chat.
+ async useSkill(conv, turn, view, args) {
+  const action = String(args.action || ''), folder = this.cwd(conv), name = String(args.name || '').trim().replace(/^\//, '');
+  if (action === 'add') {
+   if (!String(args.url || '').trim()) return SKILL.noLink;
+   const ready = await Skills.prepare(args.url, name);
+   if (!ready.token) return `Error: ${ready.error}`;
+   // The user says yes to a skill before it goes in, whatever the permission mode: it is new instructions for every chat.
+   const answer = turn.queue.length ? 'message' : await this.askSkill(conv, turn, view, ready.skill);
+   if (answer !== 'allow') {
+    await Skills.discard(ready.token);
+    return answer === 'message' ? TOOL_NOTES.message : SKILL.declined(ready.skill.name);
+   }
+   const { skill, updated, error } = await Skills.commit(ready.token);
+   if (!skill) return `Error: ${error}`;
+   turn.pills.push({ role: 'skill', kind: updated ? 'updated' : 'added', name: skill.name, text: skill.description });
+   return SKILL.added(skill, updated);
+  }
+  if (action !== 'use') return SKILL.action;
+  await Skills.refresh(folder).catch(() => {});
+  const all = Skills.lines(folder) || TOOL_NOTES.skillsNone;
+  if (!Skills.find(name, folder)) return `${SKILL.none(name)}\n${all}`;
+  if (Skills.loaded(this.history(conv)).has(name)) return SKILL.already(name);
+  const block = await Skills.content(name, folder).catch(() => null);
+  if (!block) return `${SKILL.none(name)}\n${all}`;
+  turn.pills.push({ role: 'skill', kind: 'used', name, text: Skills.find(name, folder)?.description || '' });
+  return block;
+ }
+
+ // The card that asks before a skill goes in (SkillCard in skills.js), where the approval cards stand. Stop, or a new
+ // message, answers it no.
+ async askSkill(conv, turn, view, skill) {
+  this.dismissGhost(view);
+  if (turn.next) this.dismissGhost(turn.next);
+  const card = new SkillCard(skill);
+  view.el.append(card.el);
+  turn.skillCard = card;
+  if (conv === this.active) this.followBottom();
+  const answer = await card.answer;
+  turn.skillCard = null;
+  card.dismiss();
+  if (answer === 'allow' && !turn.controller.signal.aborted) this.showGhost(turn.next || view);
+  return turn.controller.signal.aborted ? 'deny' : answer;
+ }
+
  // The agent's hand on the memory every chat shares: a new record, one written anew, one removed. Each stands in the
  // chat as a small pill, so the user always sees what was kept of them.
  useMemory(conv, turn, args) {
@@ -1702,7 +2148,7 @@ class Chat {
    if (after.isConnected) after.after(el);
    else conv.list.append(el);
    after = el;
-   (entry.role === 'memory' ? MemoryPill : NotePill).enter(el);
+   (entry.role === 'memory' ? MemoryPill : entry.role === 'asked' ? AskRecord : entry.role === 'routine' ? RoutinePill : entry.role === 'skill' ? SkillPill : NotePill).enter(el);
    if (conv === this.active) this.followBottom();
   }
  }
@@ -1718,7 +2164,8 @@ class Chat {
  async stats(conv = this.active) {
   const models = new Map(), turns = new Map(), uncounted = new Set();
   for (const entry of conv.messages) {
-   if (entry.role !== 'assistant' && entry.role !== 'compact') continue;
+   // What a fork took over from its chat was spent there: the fork's count starts with its own.
+   if ((entry.role !== 'assistant' && entry.role !== 'compact') || entry.forked) continue;
    const turn = entry.role === 'assistant' ? entry.turn || entry : null;
    if (!entry.usage) {
     if (turn && entry.steps?.length) uncounted.add(turn);
@@ -1733,7 +2180,7 @@ class Chat {
   }
   const side = await this.library.side?.(conv.id);
   let mini = null;
-  for (const entry of side?.messages || []) if (entry.usage && (entry.role === 'assistant' || entry.role === 'compact')) addUp(mini ||= tokens(), entry.usage);
+  for (const entry of side?.messages || []) if (entry.usage && !entry.forked && (entry.role === 'assistant' || entry.role === 'compact')) addUp(mini ||= tokens(), entry.usage);
   const order = [...models.keys()];
   return {
    version: 1,
@@ -1778,7 +2225,9 @@ class Chat {
  }
 
  async name(conv, config) {
-  const id = conv.id, user = conv.messages.find(entry => entry.role === 'user'), reply = conv.messages.find(entry => entry.role === 'assistant' && entry.content?.trim());
+  // A fork is named by where it went from its mark on, not by what it shares with its chat.
+  const after = conv.messages.slice(conv.messages.findLastIndex(entry => entry.role === 'fork') + 1);
+  const id = conv.id, user = after.find(entry => entry.role === 'user'), reply = after.find(entry => entry.role === 'assistant' && entry.content?.trim());
   if (!user || !reply) return;
   this.library.update(id, { named: true });
   const asked = user.text || (user.attachments || []).map(item => item.name).join(', ');
@@ -1797,12 +2246,37 @@ class Chat {
   } catch {}
  }
 
+ // A routine's own chat is named from its task at once, as a chat is from its first exchange, so the sidebar shows a
+ // name and not the start of a sentence.
+ async nameRoutine(id, text) {
+  const record = this.library.chat(id), config = record && this.config({ record });
+  if (!config?.ready) return;
+  this.library.update(id, { named: true });
+  try {
+   const said = (await Providers.complete(config, { messages: [{ role: 'system', content: TITLE_PROMPT }, { role: 'user', content: text.slice(0, TITLE_INPUT.user) }] }))
+    .replace(/^[\s"'«“„]+|[\s"'»”.!]+$/g, '').replace(/\s+/g, ' ');
+   const clean = said.length > TITLE_INPUT.long || said.split(' ').length > TITLE_INPUT.words ? '' : said.slice(0, TITLE_INPUT.max);
+   if (clean && this.library.chat(id) && !this.library.chat(id).renamed) this.library.update(id, { title: clean });
+  } catch {}
+ }
+
  restore(conv) {
   this.attach(conv);
   const ends = new Map();
   for (const entry of conv.messages) if (entry.role === 'assistant' && entry.content?.trim()) ends.set(entry.turn || entry, entry);
+  // From the end back, replies are drawn until they fill the last screens; the ones before them wait.
+  const later = new Set();
+  if (window.ThreadWindow?.has(this.thread)) {
+   let room = this.thread.clientHeight * LATER.screens;
+   for (let k = conv.messages.length - 1; k >= 0; k--) {
+    const entry = conv.messages[k];
+    if (entry.role !== 'assistant' || typeof entry.content !== 'string' || !entry.content.trim()) continue;
+    if (room <= 0) later.add(entry);
+    else room -= this.guess(entry.content);
+   }
+  }
   for (const entry of conv.messages) {
-   const el = this.entryView(entry, ends.get(entry.turn || entry) === entry);
+   const el = this.entryView(entry, ends.get(entry.turn || entry) === entry, later.has(entry));
    if (!el) continue;
    conv.list.append(el);
    this.nodes.set(entry, el);
@@ -1812,18 +2286,32 @@ class Chat {
   settle(conv.list);
  }
 
- // What a saved entry shows as when its chat opens; `last` marks the reply that ends its turn.
- entryView(entry, last) {
+ // How tall a reply will about stand, told from its words alone.
+ guess(text) {
+  let lines = 0, breaks = 0;
+  for (const line of text.split('\n')) { if (line.trim()) lines += Math.ceil(line.length / LATER.letters); else breaks++; }
+  return Math.max(LATER.least, lines * LATER.line + breaks * LATER.gap);
+ }
+
+ // What a saved entry shows as when its chat opens; `last` marks the reply that ends its turn, `later` one that waits
+ // to be drawn.
+ entryView(entry, last, later = false) {
+  // A routine's run is the app's message, not the user's: it stands as the routine's pill.
+  if (entry.role === 'user' && entry.routine) return RoutinePill.build({ kind: 'ran', routine: entry.routine.id, at: entry.routine.at, text: entry.text });
   if (entry.role === 'user') return this.userMessage(this.promptOf(entry));
-  if (entry.role === 'compact') return this.compactNotice(false);
+  if (entry.role === 'compact') return this.compactNotice(false, null, entry.count);
+  if (entry.role === 'fork') return this.forkNotice(entry);
   if (entry.role === 'reminder' || entry.role === 'noted') return NotePill.build(entry);
+  if (entry.role === 'routine') return RoutinePill.build(entry);
+  if (entry.role === 'skill') return SkillPill.build(entry);
   if (entry.role === 'memory') return MemoryPill.build(entry);
+  if (entry.role === 'asked') return AskRecord.build(entry);
   if (entry.role === 'stats') {
    const el = StatsCard.build(entry.stats);
    el.__entry = entry;
    return el;
   }
-  if (entry.content?.trim()) return this.restoredMessage(entry, last);
+  if (entry.content?.trim()) return this.restoredMessage(entry, last, later);
   return null;
  }
 
@@ -1836,23 +2324,131 @@ class Chat {
   return { text: entry.text || '', attachments };
  }
 
- restoredMessage(entry, last = true) {
+ restoredMessage(entry, last = true, later = false) {
   const el = document.createElement('div');
   el.className = 'message is-assistant';
   const content = document.createElement('div');
   content.className = 'message-content markdown';
   el.append(content);
-  StreamView.render(content, entry.content);
+  if (later) {
+   // Its words stand in for it, unseen, so that the whole chat can still be selected and copied.
+   content.textContent = entry.content;
+   el.classList.add('is-undrawn', 'is-far');
+   el.style.containIntrinsicBlockSize = `auto ${this.guess(entry.content)}px`;
+   el.__fill = () => {
+    el.__fill = null;
+    content.textContent = '';
+    StreamView.render(content, entry.content);
+    el.classList.remove('is-undrawn');
+    settle(el);
+   };
+  } else StreamView.render(content, entry.content);
   el.__entry = entry;
   if (last) el.append(this.toolbar());
   return el;
  }
 
- toolbar() {
+ // Under a message: Copy, and in a chat of the app's window, Fork from here. `copy`: whether there are words to copy.
+ toolbar(copy = true) {
   const tools = document.createElement('div');
   tools.className = 'message-tools';
-  tools.innerHTML = `<button class="md-copy message-copy" type="button" aria-label="${I18n.t('message.copy')}">${Markdown.COPY_ICON}</button>`;
+  tools.innerHTML = (copy ? `<button class="md-copy message-copy" type="button" aria-label="${I18n.t('message.copy')}">${Markdown.COPY_ICON}</button>` : '')
+   + (this.forkable ? `<button class="md-copy message-fork" type="button" aria-label="${I18n.t('message.fork')}" title="${I18n.t('message.fork')}">${Glyphs.fork}</button>` : '');
   return tools;
+ }
+
+ // Forks are made in the app's window: a mini chat goes along with the fork of its chat, and the quick window has no
+ // list to show them in.
+ get forkable() {
+  return !window.openghost?.quick;
+ }
+
+ // The key a chat asks the models with, which their caches go by: a fork keeps its chat's, as it shares its start.
+ session(conv) {
+  return conv.record?.session || conv.id;
+ }
+
+ // Where a fork begins: a quiet line naming the chat it came from, whose name opens that chat. A chat that is gone is
+ // named as it was called then.
+ forkNotice(entry) {
+  const el = document.createElement('div'), parent = this.library.chat(entry.from);
+  el.className = 'thread-fork';
+  const text = document.createElement('span');
+  text.className = 'thread-fork-text';
+  const [before, after = ''] = I18n.t('fork.from', { name: '\u0000' }).split('\u0000');
+  const name = document.createElement(parent ? 'button' : 'span');
+  name.className = 'thread-fork-name';
+  name.textContent = (parent && this.library.titleOf(parent)) || entry.title || I18n.t('chat.new');
+  if (parent) { name.type = 'button'; name.dataset.chat = parent.id; }
+  text.append(before, name, after);
+  el.innerHTML = Glyphs.fork;
+  el.append(text);
+  el.__entry = entry;
+  return el;
+ }
+
+ // The marks where forks begin say how their chats stand now: renamed, or gone. Asked when a chat comes on screen and
+ // whenever the list of chats changes.
+ syncForks(conv = this.active) {
+  for (const el of conv?.list.querySelectorAll('.thread-fork') || []) {
+   const now = el.querySelector('.thread-fork-name'), fresh = this.forkNotice(el.__entry).querySelector('.thread-fork-name');
+   if (now && now.outerHTML !== fresh.outerHTML) now.replaceWith(fresh);
+  }
+ }
+
+ // Fork from a message: from a reply, all of its turn and what came before; from a message of the user's, all before it,
+ // and that message waits in the fork's field, to be sent as it was or put another way.
+ forkAt(el) {
+  const conv = el?.closest('.thread-list')?.__conversation;
+  if (!conv?.record || el.classList.contains('is-queued')) return;
+  const messages = conv.messages, user = el.classList.contains('is-user');
+  const entry = user ? messages.find(item => this.nodes.get(item) === el) : el.__entry, at = messages.indexOf(entry);
+  if (at < 0) return;
+  if (user) { this.fork(conv, at, this.promptOf(entry)); return; }
+  const next = messages.findIndex((item, k) => k > at && item.role === 'user');
+  this.fork(conv, next < 0 ? messages.length : next);
+ }
+
+ // Fork a whole chat (the dots' menu of its row): all of it, but a turn still going on stays out, it is not done.
+ async forkChat(id) {
+  const record = this.library.chat(id);
+  if (!record || this.library.isLocked(id)) return;
+  let conv = this.conversations.get(id);
+  if (conv?.locked) return;
+  if (!conv) {
+   const body = await this.library.conversation(id).catch(() => null);
+   if (!body) return;
+   conv = { id, record, messages: body.messages, tokens: body.tokens, turn: null };
+  } else await conv.ready;
+  let cut = conv.messages.length;
+  if (conv.turn) {
+   const going = conv.messages.findIndex(item => item.turn === conv.turn.id);
+   cut = conv.messages.findLastIndex((item, k) => (going < 0 || k < going) && item.role === 'user');
+   if (cut < 0) return;
+  }
+  this.fork(conv, cut);
+ }
+
+ // The fork itself: the chat's messages up to `cut`, as a chat of its own, marked where it begins; it opens at once.
+ async fork(conv, cut, prompt = null) {
+  if (this.forking) return;
+  this.forking = true;
+  try {
+   const record = conv.record, taken = JSON.parse(JSON.stringify(conv.messages.slice(0, cut)));
+   // A fork forked again before anything was said in it: the new mark stands for both, not two marks in a row.
+   if (taken.at(-1)?.role === 'fork') taken.pop();
+   if (!taken.some(item => item.role === 'user') && !prompt) return;
+   const messages = taken.map(item => ({ ...item, forked: true }));
+   messages.push({ role: 'fork', from: record.id, title: this.library.titleOf(record) || '', at: Date.now() });
+   const tokens = cut >= conv.messages.length && conv.tokens ? conv.tokens : estimate(this.history({ messages }));
+   const made = await this.library.fork(record.id, { messages, tokens });
+   if (!made) return;
+   if (prompt?.text) await this.library.saveDraft(made.id, prompt.text);
+   await this.open(made.id);
+   this.onForked?.(made, prompt);
+  } finally {
+   this.forking = false;
+  }
  }
 
  showGhost(view) {
@@ -1946,14 +2542,14 @@ class Chat {
   if (rest) {
    const bubble = document.createElement('div');
    bubble.className = 'message-bubble';
-   LinkChip.fill(bubble, rest);
+   Skills.fill(bubble, rest);
    MessageFold.watch(bubble);
    el.append(bubble);
   }
   if (text) {
    el.append(this.toolbar());
    el.__entry = { content: text };
-  }
+  } else if (this.forkable) el.append(this.toolbar(false));
   return el;
  }
 
@@ -2029,6 +2625,7 @@ const SIDE = {
 function movedNotice() {
  const el = document.createElement('div');
  el.className = 'thread-compact thread-moved';
+ el.innerHTML = STACK;
  const text = document.createElement('span');
  text.className = 'thread-compact-text';
  text.textContent = I18n.t('mini.moved');
@@ -2045,6 +2642,7 @@ class SideChat extends Chat {
   const state = { seen: 0 };
   const record = { id: origin.id, title: '', folder: origin.record.folder, created: 0, updated: 0, pinned: false, named: true, model };
   if (library.isHome(origin.record)) record.space = origin.record.space;
+  if (origin.record.session) record.session = origin.record.session;
   super({ ...options, library: {
    folders: [],
    chats: [record],
@@ -2069,6 +2667,15 @@ class SideChat extends Chat {
 
  get hasMessages() {
   return !!this.active?.record && this.active.messages.some(entry => entry.role === 'user');
+ }
+
+ // A mini chat is forked along with its chat, not on its own.
+ get forkable() {
+  return false;
+ }
+
+ replied(conv, text) {
+  window.Notify?.replied(`mini:${this.origin.id}`, `${I18n.t('mini.title')} · ${this.origin.record?.title || ''}`, text);
  }
 
  // The chat has changed since the latest question asked here.
@@ -2130,8 +2737,13 @@ class SideChat extends Chat {
   await super.compactIfNeeded(conv, turn);
  }
 
- entryView(entry, last) {
-  return entry.role === 'moved' ? movedNotice() : super.entryView(entry, last);
+ entryView(entry, last, later) {
+  return entry.role === 'moved' ? movedNotice() : super.entryView(entry, last, later);
+ }
+
+ // The mini chat's agent reads the chat's routines in the chat itself; changing them is the chat's own agent's work.
+ routinable() {
+  return false;
  }
 
  // The mini chat's agent has a browser tab of its own, so it and the chat's agent can both use the browser at once.

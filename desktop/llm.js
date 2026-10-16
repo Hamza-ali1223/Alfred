@@ -1,6 +1,7 @@
 'use strict';
 
-// Requests to OpenAI, Anthropic and OpenRouter run here in the main process: the Codex backend and the ChatGPT sign-in are out of reach of the page.
+// Requests to OpenAI, Anthropic, OpenRouter and a local server run here in the main process: the Codex backend, the ChatGPT sign-in and the
+// user's own computer are out of reach of the page.
 // The page starts a run by id and gets its deltas, then the result or the error, back as events.
 const { app, ipcMain } = require('electron');
 const OpenAI = require('./openai');
@@ -8,6 +9,7 @@ const Claude = require('./anthropic');
 const ChatGPT = require('./chatgpt');
 const Chat = require('./chatcompletions');
 const OpenRouter = require('./openrouter');
+const Local = require('./local');
 
 const KIMCHI_MODELS = [
  { id: 'deepseek-v4-flash-0731', name: 'DeepSeek-V4-Flash-0731', context: 1048576, vision: false },
@@ -32,7 +34,10 @@ const COMMANDCODE_CONFIG = {
 };
 
 const runs = new Map();
-const PROVIDERS = new Set(['openai', 'chatgpt', 'anthropic', 'openrouter', 'kimchi', 'commandcode']);
+// The engines upstream dispatches to, plus this fork's `kimchi` and `commandcode`,
+// which are served by the OpenAI-compatible `chatcompletions` engine.
+const ENGINES = { openai: OpenAI, chatgpt: OpenAI, anthropic: Claude, openrouter: OpenRouter, local: Local, custom: Local, kimchi: Chat, commandcode: Chat };
+const PROVIDERS = new Set([...Object.keys(ENGINES), 'deepseek']);
 const CUSTOM_ID = /^custom-[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const customProviders = new Map();
 
@@ -53,12 +58,7 @@ function cleanCustomProviders(list) {
 const known = provider => PROVIDERS.has(provider) || customProviders.has(provider);
 const engineFor = provider => CUSTOM_ID.test(provider) ? Chat : engine(provider);
 
-const engine = provider => {
- if (provider === 'anthropic') return Claude;
- if (provider === 'kimchi' || provider === 'commandcode') return Chat;
- if (provider === 'openrouter') return OpenRouter;
- return OpenAI;
-};
+const engine = provider => ENGINES[provider] || OpenAI;
 
 async function start(sender, id, request) {
  const controller = new AbortController();
@@ -95,7 +95,7 @@ async function start(sender, id, request) {
 function register(fromApp) {
  ipcMain.on('llm:start', (event, id, request) => { if (fromApp(event)) start(event.sender, id, request); });
  ipcMain.on('llm:abort', (event, id) => { if (fromApp(event)) runs.get(id)?.abort(); });
- ipcMain.handle('llm:custom-providers', (event, list) => {
+ipcMain.handle('llm:custom-providers', (event, list) => {
   if (!fromApp(event)) return false;
   const next = cleanCustomProviders(list);
   if (!next) return false;
@@ -103,15 +103,20 @@ function register(fromApp) {
   for (const [id, item] of next) customProviders.set(id, item);
   return true;
  });
- ipcMain.handle('llm:models', async (event, provider, key, apiUrl) => {
+ // `extra`: what a provider needs besides its key: the address of a service, the names of models written in by hand.
+ // This fork's `custom-<uuid>` providers pass their base URL through it as a plain string instead.
+ ipcMain.handle('llm:models', async (event, provider, key, extra) => {
   if (!fromApp(event) || !known(provider)) return { models: [] };
   const custom = customProviders.get(provider);
   const isKimchi = provider === 'kimchi';
   const isCommandCode = provider === 'commandcode';
+  const typed = typeof extra === 'string' ? { address: extra } : extra || {};
+  const address = typeof typed.address === 'string' ? typed.address : '';
+  const names = Array.isArray(typed.names) ? typed.names.filter(name => typeof name === 'string' && name).slice(0, 50) : [];
   try {
    return {
     models: await engineFor(provider).models(
-     { provider, key, apiUrl: custom?.baseUrl || (isKimchi ? KIMCHI_CONFIG.apiUrl : isCommandCode ? COMMANDCODE_CONFIG.apiUrl : undefined), headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined, preset: isKimchi ? KIMCHI_CONFIG.preset : isCommandCode ? COMMANDCODE_CONFIG.preset : undefined },
+     { provider, key, address, names, apiUrl: custom?.baseUrl || (isKimchi ? KIMCHI_CONFIG.apiUrl : isCommandCode ? COMMANDCODE_CONFIG.apiUrl : address || undefined), headers: isKimchi ? KIMCHI_CONFIG.headers : isCommandCode ? COMMANDCODE_CONFIG.headers : undefined, preset: isKimchi ? KIMCHI_CONFIG.preset : isCommandCode ? COMMANDCODE_CONFIG.preset : undefined },
      { chatgpt: ChatGPT.credentials, version: app.getVersion() }
     )
    };

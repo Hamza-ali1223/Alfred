@@ -149,11 +149,61 @@ const SCHEMAS = [
   id: { type: 'string', description: 'For update and forget: the id of the record, like m3' },
   text: { type: 'string', description: 'For save and update: the whole record, one or two plain sentences about the user in their language, clear on their own a year from now' },
  }, ['action']),
- fn('notepad', 'The user\'s notepad beside this chat; what is in it comes in a note from the app. remind: bring a note up when its moment has come. The app shows it to the user as a card in the chat; then ask whether to do it now and wait for their yes. done: tick a note off once the user has agreed and it is done, or once they say it no longer matters. add: write a note down when the user asks you to remember something or to remind them of it later.', {
+ fn('notepad', 'The user\'s notepad beside this chat; what is in it comes in a note from the app. remind: bring a note up when its moment has come. The app shows it to the user as a card in the chat; then ask whether to do it now and wait for their yes. done: tick a note off once the user has agreed and it is done, or once they say it no longer matters. add: write a note down when the user asks you to keep something in mind or to bring it up at a moment of your work together. Not for anything tied to a time or a date, repeated, or to be watched while the user is away, even when the user says "remind me": a note never comes up by itself, so that is the routine tool.', {
   action: { type: 'string', enum: ['remind', 'done', 'add'] },
   id: { type: 'string', description: 'For remind and done: the id of the note, like n3' },
   text: { type: 'string', description: 'For add: the note, one short line in the user\'s own words and language' },
  }, ['action']),
+ fn('skill', 'Skills: folders of instructions for kinds of tasks, in the Agent Skills format other agents use too. The ones you can use come in a note from the app. use: load the instructions of a skill by its name, before you start a task that fits it; you get them with the folder of the skill and its other files. add: put in a new skill from a link the user gave or asked for: a GitHub folder or repository, a .zip or .skill file, or a SKILL.md. It is ready in every chat at once.', {
+  action: { type: 'string', enum: ['use', 'add'] },
+  name: { type: 'string', description: 'For use: the name of the skill, as in the note. For add: which skill, when the link holds several' },
+  url: { type: 'string', description: 'For add: the link to the skill' },
+ }, ['action']),
+ fn('routine', 'Routines: tasks the app gives you by itself, on time, in this chat, for as long as the user wants: every hour, every morning, on Mondays, once at 19:00. The routines of this chat come in a note from the app, each with its id. add: set one up when something is to be done, checked or said at a time or a date, again and again, or while the user is away: also when the user only says "remind me" or "tell me when", or only describes such a need. edit: change what one does or when. pause and resume: stop one for a while and start it again. remove: take one away. The answer tells the time on the computer now and when the routine runs next.', {
+  action: { type: 'string', enum: ['add', 'edit', 'pause', 'resume', 'remove'] },
+  id: { type: 'string', description: 'For edit, pause, resume and remove: the id of the routine, like r1x2y' },
+  text: { type: 'string', description: 'For add, and for edit when what it does changes: the task as an instruction to yourself that is whole on its own, in the user\'s language: what to do or check and where, what counts as worth telling, and what to tell the user' },
+  when: {
+   type: 'object', description: 'For add, and for edit when the time changes: when it runs, in the computer\'s own time',
+   properties: {
+    kind: { type: 'string', enum: ['once', 'every', 'daily', 'weekly', 'monthly'], description: 'once: one time. every: every so many minutes. daily: every day at a time. weekly: on some days of the week at a time. monthly: on a day of every month at a time' },
+    at: { type: 'string', description: 'For once: the local date and time, YYYY-MM-DDTHH:MM' },
+    in_minutes: { type: 'integer', description: 'For once, instead of at: how many minutes from now' },
+    minutes: { type: 'integer', description: 'For every: how often in minutes, 5 at the least; 60 is every hour, 1440 every day. Runs on the hour and at even steps from it' },
+    time: { type: 'string', description: 'For daily, weekly and monthly: the time of day, HH:MM in 24 hours' },
+    days: { type: 'array', items: { type: 'string', enum: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] }, description: 'For weekly: the days it runs on. For every: only on these days (all days if left out)' },
+    from: { type: 'string', description: 'For every: the hours it runs between, from HH:MM' },
+    to: { type: 'string', description: 'For every: until HH:MM, the last run' },
+    day: { type: 'integer', description: 'For monthly: the day of the month, 1 to 31 (the last day of a shorter month)' },
+   },
+   required: ['kind'],
+  },
+ }, ['action']),
+ fn('ask_user', 'Ask the user one to four questions, each with ready choices, when their answer decides what you do next and you cannot find it out yourself. The app turns the message field into a card: the user picks a choice with one press or writes an answer in their own words, and you get the answers back as the result of this call. The app adds the line for their own words itself, so never add a choice like "Other". When you have a reason to prefer one choice, put it first and end its label with "(Recommended)", in English exactly so: the app shows it as a mark in the user\'s language. Write everything else in the user\'s language.', {
+  questions: {
+   type: 'array', minItems: 1, maxItems: 4, description: 'The questions, the one that matters most first. Each is one decision.',
+   items: {
+    type: 'object',
+    properties: {
+     question: { type: 'string', description: 'The whole question, short and concrete, ending with a question mark' },
+     header: { type: 'string', description: 'What the question is about in one or two words, at most 12 characters, e.g. "Level", "Goal", "Format"' },
+     options: {
+      type: 'array', minItems: 2, maxItems: 4, description: 'Two to four choices that really differ and lead to different results',
+      items: {
+       type: 'object',
+       properties: {
+        label: { type: 'string', description: 'The choice in one to five words' },
+        description: { type: 'string', description: 'One short line: what this choice means or what it leads to' },
+       },
+       required: ['label', 'description'],
+      },
+     },
+     multiSelect: { type: 'boolean', description: 'true when several choices can hold at once; otherwise the user takes one' },
+    },
+    required: ['question', 'header', 'options'],
+   },
+  },
+ }, ['questions']),
 ];
 
 const BROWSER_FREE = new Set(['browser_snapshot', 'browser_screenshot', 'browser_read', 'browser_wait', 'browser_scroll']);
@@ -688,6 +738,8 @@ function needsApproval(name, args, { mode, cwd, attached = [], apart = null }) {
   case 'web_search':
   case 'find_media':
   case 'fetch_url': return ask;
+  // Loading a skill only reads its instructions. Adding one asks the user with a card of its own, in every mode (chat.js).
+  case 'skill': return false;
   default: return true;
  }
 }
@@ -1037,6 +1089,8 @@ window.AgentTools = {
  },
  cancel(id) {
   bridge?.cancel(id);
+  // A browser step still waiting for its turn at the keyboard does not start.
+  window.browserPanel?.cancel(id);
  },
  // One way to write a file's place, so that two agents naming the same file are seen to.
  place(cwd, path) {

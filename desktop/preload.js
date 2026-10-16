@@ -49,11 +49,58 @@ contextBridge.exposeInMainWorld('openghost', {
  readPdf: source => ipcRenderer.invoke('pdf:read', source),
  pickFolder: () => ipcRenderer.invoke('folder:pick'),
  revealFolder: folder => ipcRenderer.invoke('folder:reveal', folder),
+ // A file or a folder of a list drawn in the chat, opened by a press on it: 'opened', 'shown' in its folder, or 'missing'.
+ openPath: target => ipcRenderer.invoke('path:open', target),
+ // Whether an agent is at work in this window: while one is, the window is not slowed down when it is out of sight.
+ working: working => ipcRenderer.send('app:working', !!working),
+ // A finished reply that came while the user was not looking (notify.js), and what has been seen since; the choice of
+ // notifications and their sound; a notification pressed, which opens its chat.
+ notify: {
+  get: () => ipcRenderer.invoke('notify:get'),
+  set: next => ipcRenderer.invoke('notify:set', next),
+  reply: (key, title, text) => ipcRenderer.invoke('notify:reply', key, title, text),
+  seen: keys => ipcRenderer.send('notify:seen', keys),
+  onOpen: callback => ipcRenderer.on('notify:open', (event, key) => callback(key)),
+ },
+ // Routines (desktop/routines.js keeps them and says when one is due): what there is, a new one, a change, one taken
+ // away, one run now, those of a chat that is gone; that they changed, that one is due, and that this page can run them.
+ // Whether the computer is kept awake for them (desktop/awake.js).
+ routines: {
+  list: () => ipcRenderer.invoke('routines:list'),
+  add: data => ipcRenderer.invoke('routines:add', data),
+  update: (id, changes) => ipcRenderer.invoke('routines:update', id, changes),
+  remove: id => ipcRenderer.invoke('routines:remove', id),
+  now: id => ipcRenderer.invoke('routines:now', id),
+  forget: chat => ipcRenderer.invoke('routines:forget', chat),
+  onChange: callback => ipcRenderer.on('routines:changed', (event, items) => callback(items)),
+  onRun: callback => ipcRenderer.on('routines:run', (event, run) => callback(run)),
+  ready: () => ipcRenderer.send('routines:ready'),
+  awake: {
+   get: () => ipcRenderer.invoke('awake:get'),
+   set: next => ipcRenderer.invoke('awake:set', next),
+  },
+ },
+ // Skills (desktop/skills.js): those a chat in a folder can use, the instructions of one; one fetched from a link to be
+ // shown to the user, then put in or let go; and that they changed.
+ skills: {
+  list: folder => ipcRenderer.invoke('skills:list', folder),
+  read: (name, folder) => ipcRenderer.invoke('skills:read', name, folder),
+  prepare: (url, name) => ipcRenderer.invoke('skills:prepare', url, name),
+  commit: token => ipcRenderer.invoke('skills:commit', token),
+  discard: token => ipcRenderer.invoke('skills:discard', token),
+  onChange: callback => ipcRenderer.on('skills:changed', () => callback()),
+ },
+ // The same place's path into the clipboard, and a terminal opened there ('opened' or 'missing').
+ copyPath: target => ipcRenderer.invoke('path:copy', target),
+ terminalAt: target => ipcRenderer.invoke('path:terminal', target),
  // Where chats started without a project folder keep their own folders, and letting go of one that stayed empty.
  chatsFolder: () => ipcRenderer.invoke('folder:chats'),
  releaseFolder: folder => ipcRenderer.invoke('folder:release', folder),
  setTitleBar: (color, symbols) => ipcRenderer.send('window:titlebar', color, symbols),
  setTheme: choice => ipcRenderer.invoke('theme:set', choice),
+ // The language the page speaks, for what the main process itself puts on screen; and what the About page shows.
+ lang: { set: next => ipcRenderer.invoke('lang:set', next) },
+ about: () => ipcRenderer.invoke('app:about'),
  // How large the app is drawn: fitted to the screen ('auto') or a size picked by hand (see desktop/size.js).
  size: {
   get: () => ipcRenderer.invoke('size:get'),
@@ -64,6 +111,7 @@ contextBridge.exposeInMainWorld('openghost', {
  access: {
   state: () => ipcRenderer.invoke('access:state'),
   open: () => ipcRenderer.invoke('access:open'),
+  restart: () => ipcRenderer.invoke('access:restart'),
  },
  store: {
   read: key => ipcRenderer.invoke('store:read', key),
@@ -86,7 +134,7 @@ contextBridge.exposeInMainWorld('openghost', {
   start: (id, request) => ipcRenderer.send('llm:start', id, request),
   abort: id => ipcRenderer.send('llm:abort', id),
   onEvent: callback => ipcRenderer.on('llm:event', (event, data) => callback(data)),
-  models: (provider, key, apiUrl) => ipcRenderer.invoke('llm:models', provider, key, apiUrl),
+models: (provider, key, extra) => ipcRenderer.invoke('llm:models', provider, key, extra),
   account: (provider, key) => ipcRenderer.invoke('llm:account', provider, key),
   customProviders: providers => ipcRenderer.invoke('llm:custom-providers', providers),
  },

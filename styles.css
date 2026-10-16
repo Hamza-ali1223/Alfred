@@ -537,76 +537,52 @@ body {
   margin: 14px calc(-1 * var(--toggle-inset)) 8px;
 }
 
-/* Chats slip under the header and the footer through the same soft fade as the messages in the chat.
-   Each fade follows the scroll: it comes in once there is something past that edge, so the first and last rows stay clear at the ends.
-   A fade is a piece of the window's backdrop, pinned to the window so it lines up with the light around it. */
-.chats::before,
-.chats::after {
-  content: "";
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  left: 0;
-  height: 28px;
-  background: var(--frame), var(--app-bg);
-  background-attachment: fixed;
-  opacity: 0;
-  pointer-events: none;
+/* Chats slip under the header and the footer by fading out: the rows themselves grow clear towards the edge, through a
+   mask on the list, so the fade lies right on whatever is behind the sidebar, its glass and the desktop seen through it
+   included. (A piece of the window's backdrop laid over the rows did not: on the clear sidebar it stood out as a band of
+   light.) Each fade follows the scroll: it comes in once there is something past that edge, so the first and last rows
+   stay clear at the ends. */
+@property --chats-fade-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
-.chats::before {
-  top: 0;
-  -webkit-mask-image: linear-gradient(#000, transparent 70%);
-  mask-image: linear-gradient(#000, transparent 70%);
+@property --chats-fade-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
-.chats::after {
-  bottom: 0;
-  -webkit-mask-image: linear-gradient(transparent, #000 70%);
-  mask-image: linear-gradient(transparent, #000 70%);
+.chats-scroll {
+  -webkit-mask-image: linear-gradient(transparent, #000 var(--chats-fade-top), #000 calc(100% - var(--chats-fade-bottom)), transparent);
+  mask-image: linear-gradient(transparent, #000 var(--chats-fade-top), #000 calc(100% - var(--chats-fade-bottom)), transparent);
 }
 
 /* The fades run on the scroll only while there is one. In a list that fits, the timeline would be inactive and the fade
    animations would sit waiting on it for good, and a list in that state trembled after a hover. */
-.chats:has(> .chats-scrollbar.is-scrollable) {
-  timeline-scope: --chats;
-}
-
 .chats:has(> .chats-scrollbar.is-scrollable) > .chats-scroll {
-  scroll-timeline: --chats block;
-}
-
-.chats:has(> .chats-scrollbar.is-scrollable)::before,
-.chats:has(> .chats-scrollbar.is-scrollable)::after {
-  animation-duration: auto;
-  animation-timing-function: linear;
-  animation-fill-mode: both;
-  animation-timeline: --chats;
-}
-
-.chats:has(> .chats-scrollbar.is-scrollable)::before {
-  animation-name: chats-edge-in;
-  animation-range: 0 28px;
-}
-
-.chats:has(> .chats-scrollbar.is-scrollable)::after {
-  animation-name: chats-edge-out;
-  animation-range: calc(100% - 28px) 100%;
+  animation-name: chats-edge-in, chats-edge-out;
+  animation-duration: auto, auto;
+  animation-timing-function: linear, linear;
+  animation-fill-mode: both, both;
+  animation-timeline: scroll(self block), scroll(self block);
+  animation-range: 0 28px, calc(100% - 28px) 100%;
 }
 
 @keyframes chats-edge-in {
   to {
-    opacity: 1;
+    --chats-fade-top: 28px;
   }
 }
 
 @keyframes chats-edge-out {
   from {
-    opacity: 1;
+    --chats-fade-bottom: 28px;
   }
 
   to {
-    opacity: 0;
+    --chats-fade-bottom: 0px;
   }
 }
 
@@ -1381,6 +1357,9 @@ body {
   --spot-frost: blur(34px) saturate(1.9) brightness(1.08);
   --spot-plate: rgba(255, 255, 255, 0.09);
   --spot-rule: rgba(255, 255, 255, 0.09);
+  /* An even quiet rim and no glint, as on the glass buttons of the chat. */
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-shade: 0 0 0 0 transparent;
   position: fixed;
   inset: 0;
   width: auto;
@@ -1401,6 +1380,7 @@ body {
   --spot-frost: blur(34px) saturate(1.9) brightness(1.04);
   --spot-plate: rgba(60, 70, 90, 0.1);
   --spot-rule: rgba(40, 50, 70, 0.09);
+  --glass-rim: rgba(20, 30, 60, 0.1);
 }
 
 .spotlight-panel {
@@ -1409,12 +1389,12 @@ body {
   left: var(--spot-x);
   width: var(--spot-width);
   overflow: hidden;
-  transform-origin: 50% 30px;
+  transform-origin: 50% 50%;
   pointer-events: auto;
 }
 
 .spotlight-panel.glass-lens {
-  border-radius: 28px;
+  border-radius: 24px;
   background: var(--spot-fill);
   box-shadow: var(--glass-shade), 0 30px 80px rgba(0, 0, 0, calc(0.42 * var(--shadow))), 0 6px 18px rgba(0, 0, 0, calc(0.2 * var(--shadow)));
   -webkit-backdrop-filter: var(--spot-frost);
@@ -1422,39 +1402,41 @@ body {
 }
 
 .spotlight-bar {
+  position: relative;
   display: flex;
   align-items: center;
-  height: 60px;
+  height: 52px;
 }
 
 .spotlight-input {
   flex: 1;
   min-width: 0;
   height: 100%;
-  padding: 0 24px 0 62px;
+  padding: 0 20px 0 52px;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--fg-primary);
   caret-color: var(--fg-primary);
   font: inherit;
-  font-size: 23px;
+  font-size: 19px;
   font-weight: 400;
   letter-spacing: -0.012em;
 }
 
 .spotlight-input::placeholder {
-  color: rgba(var(--fg-rgb), 0.42);
+  color: rgba(var(--fg-rgb), 0.52);
 }
 
-/* The magnifier of the field is drawn stroke by stroke as the field opens. */
+/* The magnifier of the field: a part of the panel, it comes and goes with it. */
 .spotlight-lens {
   position: absolute;
-  top: calc(var(--spot-y) + 18px);
-  left: calc(var(--spot-x) + 22px);
-  width: 24px;
-  height: 24px;
+  top: 16px;
+  left: 19px;
+  width: 20px;
+  height: 20px;
   color: rgba(var(--fg-rgb), 0.62);
+  pointer-events: none;
 }
 
 .spotlight-lens svg {
@@ -1489,7 +1471,7 @@ body {
 
 .spotlight-results {
   position: relative;
-  max-height: min(424px, var(--spot-room, 424px));
+  max-height: min(372px, var(--spot-room, 372px));
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -1511,7 +1493,7 @@ body {
 .spotlight-list {
   position: relative;
   margin: 0;
-  padding: 10px;
+  padding: 8px;
   list-style: none;
 }
 
@@ -1523,10 +1505,10 @@ body {
 .spotlight-glide {
   position: absolute;
   top: 0;
-  right: 10px;
-  left: 10px;
-  height: 48px;
-  border-radius: 18px;
+  right: 8px;
+  left: 8px;
+  height: 42px;
+  border-radius: 16px;
   background: var(--spot-plate);
   opacity: 0;
   pointer-events: none;
@@ -1537,10 +1519,10 @@ body {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 48px;
-  padding: 0 16px 0 14px;
-  border-radius: 18px;
+  gap: 12px;
+  height: 42px;
+  padding: 0 14px 0 12px;
+  border-radius: 16px;
   cursor: pointer;
   user-select: none;
 }
@@ -1549,11 +1531,11 @@ body {
 .spotlight-folder {
   display: flex;
   align-items: center;
-  gap: 14px;
-  height: 34px;
-  padding: 4px 16px 0 14px;
+  gap: 12px;
+  height: 30px;
+  padding: 4px 14px 0 12px;
   color: rgba(var(--fg-rgb), 0.5);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 550;
   user-select: none;
 }
@@ -1566,7 +1548,7 @@ body {
 }
 
 .spotlight-row.is-nested {
-  padding-left: 48px;
+  padding-left: 42px;
 }
 
 .spotlight-row-sign {
@@ -1593,7 +1575,7 @@ body {
   min-width: 0;
   overflow: hidden;
   color: rgba(var(--fg-rgb), 0.74);
-  font-size: 15.5px;
+  font-size: 14.5px;
   font-weight: 450;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1691,6 +1673,26 @@ body {
   background: linear-gradient(transparent, var(--chat-bg) 70%);
 }
 
+/* The room the composer takes (composer-space.js). It changes on every frame while the composer grows by a line, and
+   a property that passes down would have every message of the chat styled anew each time: this one stays where it is
+   set, and only what stands clear of the composer takes it from its parent. */
+@property --composer-space {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 140px;
+}
+
+.thread-view,
+.thread,
+.thread::after,
+.thread-scrollbar,
+.thread-bottom,
+.thread-wait,
+.welcome,
+.mini-empty {
+  --composer-space: inherit;
+}
+
 .thread {
   position: absolute;
   inset: 0;
@@ -1710,11 +1712,41 @@ body {
   gap: 28px;
   width: min(var(--composer-max-width), 100% - 2 * var(--composer-side-gap));
   margin: 0 auto;
-  padding: 56px 0 calc(var(--composer-space, 140px) + 32px);
+  padding: 56px 0 0;
 }
 
 .thread-list:empty {
   padding: 0;
+}
+
+/* The room under the last message, where the composer stands. It is a block of its own under the list and not the
+   list's padding: a list whose style changes has its messages styled anew. */
+.thread::after {
+  content: "";
+  display: block;
+  height: calc(var(--composer-space) + 32px);
+}
+
+.thread:has(> .thread-list:not(.is-parked):empty)::after {
+  content: none;
+}
+
+/* A message more than a screen away from what is seen (thread-window.js): a block of the height it had, left out of
+   the page's work until it comes near. */
+.thread-list > .is-far {
+  content-visibility: auto;
+}
+
+/* A reply that waits to be drawn: its bare words are there to be selected, not to be seen. */
+.message.is-undrawn > .message-content {
+  color: transparent;
+  white-space: pre-wrap;
+}
+
+/* The place being read is held by thread-window.js, which knows of the blocks put aside; the page's own holding of it
+   would move the chat a second time. */
+.main > .thread-view > .thread {
+  overflow-anchor: none;
 }
 
 .thread-list.is-parked {
@@ -2159,6 +2191,11 @@ ghost-thinking {
   opacity: 1;
 }
 
+/* A message still waiting for its turn is not in the chat yet: nothing can be forked from it. */
+.message.is-queued .message-fork {
+  display: none;
+}
+
 @keyframes message-tools-in {
   from {
     opacity: 0;
@@ -2547,28 +2584,128 @@ ghost-thinking {
   cursor: default;
 }
 
+/* The mark a summary leaves in the chat: the sheets that were put together, seen from their edge, and under them how
+   many messages went into the summary. While the summary is being written the sheets come down one onto another;
+   when it could not be written they turn amber. */
 .thread-compact {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
-  color: rgba(var(--fg-rgb), 0.34);
+  gap: 8px;
+  padding: 2px 0;
+  color: rgba(var(--fg-rgb), 0.4);
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
+  text-align: center;
   user-select: none;
   animation: message-in 0.35s var(--motion-easing) both;
 }
 
-.thread-compact::before,
-.thread-compact::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(var(--fg-rgb), 0.09));
+.thread-compact-text b {
+  color: rgba(var(--fg-rgb), 0.62);
+  font-weight: 560;
 }
 
-.thread-compact::after {
-  background: linear-gradient(90deg, rgba(var(--fg-rgb), 0.09), transparent);
+/* Where a fork begins: a quiet line with a branch, the name of the chat it came from a little louder; pressed, that
+   chat opens (chat.js). */
+.thread-fork {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 2px 0;
+  color: rgba(var(--fg-rgb), 0.4);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+  user-select: none;
+  animation: message-in 0.35s var(--motion-easing) both;
+}
+
+.thread-fork > .glyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.thread-fork-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-fork-name {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.62);
+  font: inherit;
+  font-weight: 560;
+}
+
+button.thread-fork-name {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--fg-rgb), 0.22);
+  text-underline-offset: 3px;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+button.thread-fork-name:hover {
+  color: var(--fg-primary);
+  text-decoration-color: rgba(var(--fg-rgb), 0.5);
+}
+
+button.thread-fork-name:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.thread-compact-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.thread-compact-stack i {
+  width: 40px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(var(--fg-rgb), 0.5);
+  transition: background-color 0.4s ease, opacity 0.4s ease, transform 0.5s var(--motion-easing);
+}
+
+/* `--sheet`: how much of a sheet shows: the ones further up the stack are fainter. */
+.thread-compact-stack i:nth-child(1) { --sheet: 0.3; width: 20px; opacity: var(--sheet); }
+.thread-compact-stack i:nth-child(2) { --sheet: 0.55; width: 30px; opacity: var(--sheet); }
+
+.thread-compact.is-live .thread-compact-stack i:nth-child(1) { animation: compact-sheet 1.9s var(--motion-easing) infinite; }
+.thread-compact.is-live .thread-compact-stack i:nth-child(2) { animation: compact-sheet 1.9s var(--motion-easing) 0.16s infinite; }
+
+/* A sheet is held above the stack, comes down onto it, and is lifted again for the next one. */
+@keyframes compact-sheet {
+  0% { transform: translateY(-5px); opacity: 0; }
+  22% { transform: translateY(-5px); opacity: var(--sheet); }
+  60%, 82% { transform: none; opacity: var(--sheet); }
+  100% { transform: none; opacity: 0; }
+}
+
+.thread-compact.is-failed .thread-compact-stack i {
+  background: rgb(240, 170, 70);
+}
+
+[data-theme="light"] .thread-compact.is-failed .thread-compact-stack i {
+  background: rgb(190, 120, 20);
+}
+
+/* The mini chat's own mark, that it has read the main chat anew, is one line drawn under what came before. */
+.thread-moved .thread-compact-stack i:not(:last-child) {
+  display: none;
 }
 
 /* A darker band runs across semi-transparent letters. */
@@ -3206,6 +3343,32 @@ ghost-thinking {
   background: rgba(var(--fg-rgb), 0.1);
 }
 
+/* The mini chat's place and size change on every frame while it is dragged or resized. They are its own alone: passed
+   down, they would have every message in it styled anew each time. */
+@property --mini-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --mini-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --mini-width {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 330px;
+}
+
+@property --mini-height {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 490px;
+}
+
 .mini {
   --composer-max-width: 100%;
   --composer-side-gap: 12px;
@@ -3374,6 +3537,53 @@ ghost-thinking {
   to { background-position: -40% 0; }
 }
 
+/* The same bars in the chat itself while the browser panel opens or closes (thread-bones.js): they stand in a column
+   as wide as the list would be, and lie still, for they are there for half a second. */
+.thread-bones {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.thread-bones.is-shown {
+  opacity: 1;
+}
+
+.thread-bones-column {
+  position: relative;
+  width: min(var(--composer-max-width), 100% - 2 * var(--composer-side-gap));
+  height: 100%;
+  margin: 0 auto;
+}
+
+.thread-bones .mini-bone,
+.composer-bones .mini-bone {
+  animation: none;
+}
+
+.composer-bones {
+  position: absolute;
+  z-index: 1;
+  width: 42%;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.composer-bones.is-shown {
+  opacity: 1;
+}
+
+.composer-bones .mini-bone {
+  width: 100%;
+}
+
 .mini-head {
   flex: none;
   display: flex;
@@ -3456,7 +3666,11 @@ ghost-thinking {
 
 .mini .thread-list {
   gap: 22px;
-  padding: 12px 0 calc(var(--composer-space, 120px) + 20px);
+  padding: 12px 0 0;
+}
+
+.mini .thread::after {
+  height: calc(var(--composer-space) + 20px);
 }
 
 .mini .thread-list:empty {
@@ -7359,6 +7573,28 @@ h6.md-h {
   fill: transparent;
 }
 
+/* A file or a folder that a press opens says so under the pointer; one that is no longer there shakes its head. */
+:is(.dg-fv-row, .dg-fv-head).is-opening {
+  cursor: pointer;
+}
+
+:is(.dg-fv-row, .dg-fv-head).is-gone > .dg-body {
+  animation: dg-fv-gone 0.42s ease;
+}
+
+@keyframes dg-fv-gone {
+  20% { transform: translateX(-4px); }
+  45% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.dg-fv-row, .dg-fv-head).is-gone > .dg-body {
+    animation: none;
+    opacity: 0.45;
+  }
+}
+
 .dg-glide {
   fill: rgba(var(--fg-rgb), 0.05);
   opacity: 0;
@@ -7400,7 +7636,13 @@ h6.md-h {
 }
 
 .thread-bottom {
-  --icon-button-size: 36px;
+  /* The same low pill of plain frosted glass as the capsule at the top of the chat (.top-tools). */
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --icon-button-size: 30px;
+  width: 44px;
+  height: 30px;
   --icon-size: 17px;
   --icon-rgb: var(--fg-rgb);
   --icon-opacity: 0.8;
@@ -7410,14 +7652,21 @@ h6.md-h {
   bottom: calc(var(--composer-space, 140px) + 14px);
   left: 50%;
   translate: -50% 0;
-  background: var(--glass-fill), var(--lens-bg);
-  -webkit-backdrop-filter: var(--glass-lens,) blur(3px) saturate(1.6) brightness(1.05);
-  backdrop-filter: var(--glass-lens,) blur(3px) saturate(1.6) brightness(1.05);
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: var(--glass-lens,) blur(5px) saturate(1.5) brightness(1.06);
+  backdrop-filter: var(--glass-lens,) blur(5px) saturate(1.5) brightness(1.06);
   opacity: 0;
   transform: translateY(10px) scale(0.6);
   visibility: hidden;
   pointer-events: none;
   transition: opacity 0.2s ease, transform 0.4s var(--motion-easing), visibility 0s linear 0.4s, filter 0.45s var(--motion-easing);
+}
+
+[data-theme="light"] .thread-bottom {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(250, 251, 253, 0.65));
+  --glass-rim: rgba(20, 30, 60, 0.1);
+  -webkit-backdrop-filter: var(--glass-lens,) blur(5px) saturate(1.4) brightness(1.02);
+  backdrop-filter: var(--glass-lens,) blur(5px) saturate(1.4) brightness(1.02);
 }
 
 .thread-bottom.is-shown {
@@ -8073,9 +8322,16 @@ h6.md-h {
    drawing. The capsule is as wide as what it holds: the notes' button is there only once the chat exists, and the
    capsule grows to take it in. The sidebar's glyph stands where it stood before there was a capsule. */
 .top-tools {
-  --top-tool: 30px;
-  --top-pad: 3px;
+  /* A lens of the Effort slider's thumb's kind: a low pill, wider than it is tall, so the bend of its edge takes most of it. */
+  --top-tool: 26px;
+  --top-pad: 2px;
+  --top-side: 9px;
   --top-gap: 2px;
+  /* Plain frosted glass: no glint on it, an even quiet rim, and what lies under it a little blurred. */
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(5px) saturate(1.5) brightness(1.06);
   --icon-button-size: var(--top-tool);
   --icon-button-radius: 50%;
   --icon-button-transition: color 0.2s ease, background-color 0.2s ease;
@@ -8083,20 +8339,26 @@ h6.md-h {
   --icon-hover-opacity: 1;
   position: absolute;
   z-index: 3;
-  top: calc(var(--toggle-inset) - 2px);
+  top: calc(var(--toggle-inset) + 1px);
   left: calc(var(--toggle-inset) - 2px);
   display: flex;
   gap: var(--top-gap);
-  width: calc(var(--top-tool) + 2 * var(--top-pad));
+  width: calc(var(--top-tool) + 2 * var(--top-side));
   height: calc(var(--top-tool) + 2 * var(--top-pad));
-  padding: var(--top-pad);
+  padding: var(--top-pad) var(--top-side);
   overflow: clip;
   -webkit-app-region: no-drag;
   transition: width 0.5s var(--motion-easing);
 }
 
+[data-theme="light"] .top-tools {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(250, 251, 253, 0.65));
+  --glass-rim: rgba(20, 30, 60, 0.1);
+  --glass-backdrop: blur(5px) saturate(1.4) brightness(1.02);
+}
+
 .top-tools {
-  width: calc(var(--top-count, 1) * var(--top-tool) + (var(--top-count, 1) - 1) * var(--top-gap) + 2 * var(--top-pad));
+  width: calc(var(--top-count, 1) * var(--top-tool) + (var(--top-count, 1) - 1) * var(--top-gap) + 2 * var(--top-side));
 }
 
 /* The ghost of a mini chat closed while its agent was at work: it breathes while the agent works, and carries a dot once
@@ -8121,18 +8383,33 @@ h6.md-h {
   display: none;
 }
 
-.mini-toggle:hover {
-  background: rgba(var(--fg-rgb), 0.1);
+/* Under the pointer the ghost brightens, as the sidebar's sign beside it does; no grey disc comes up round it. */
+.mini-toggle:hover .glyph-ghost {
+  opacity: 1;
 }
 
 .mini-toggle:focus-visible {
   box-shadow: inset 0 0 0 2px var(--focus-ring, rgba(var(--fg-rgb), 0.35));
 }
 
+/* `--mini-bite`: how much of the ghost is cut away round the dot, so that the dot stands clear of it. */
+@property --mini-bite {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 .mini-toggle .glyph-ghost {
   width: 15px;
   height: 16px;
   opacity: 0.82;
+  -webkit-mask-image: radial-gradient(circle at 14px 1.5px, transparent calc(var(--mini-bite) - 0.5px), #000 var(--mini-bite));
+  mask-image: radial-gradient(circle at 14px 1.5px, transparent calc(var(--mini-bite) - 0.5px), #000 var(--mini-bite));
+  transition: opacity 0.2s ease, --mini-bite 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.mini-toggle:is([data-state="waiting"], [data-state="ready"]) .glyph-ghost {
+  --mini-bite: 4.5px;
 }
 
 .mini-toggle .glyph-ghost-eye {
@@ -8143,10 +8420,11 @@ h6.md-h {
   animation: mini-breathe 1.8s ease-in-out infinite;
 }
 
+/* The dot's middle is the middle of the bite: 14px and 1.5px into a ghost that stands 5.5px and 5px into the button. */
 .mini-toggle-dot {
   position: absolute;
-  top: 5px;
-  right: 5px;
+  top: 3.5px;
+  right: 3.5px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -8187,126 +8465,318 @@ h6.md-h {
   --icon-button-bg: rgba(var(--fg-rgb), 0.1);
 }
 
-/* The user's notes beside a chat (notepad.js). Their button stands at the top of the chat, beside the sidebar's. */
-.notes-toggle[hidden] {
+/* The user's notes beside a chat (notepad.js). Their button is a pill of glass of its own at the top of the chat, right
+   after the capsule (.top-tools) and of the same plain frosted glass: the word and, while notes wait, their number in a
+   small disc. */
+.notes-pill {
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(5px) saturate(1.5) brightness(1.06);
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--toggle-inset) + 1px);
+  left: calc(var(--toggle-inset) + 24px + var(--top-count, 1) * 26px + (var(--top-count, 1) - 1) * 2px);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 13px;
+  border: 0;
+  outline: none;
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: left 0.5s var(--motion-easing);
+}
+
+[data-theme="light"] :is(.notes-pill, .notepad) {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(250, 251, 253, 0.65));
+  --glass-rim: rgba(20, 30, 60, 0.1);
+  --glass-backdrop: blur(5px) saturate(1.4) brightness(1.02);
+}
+
+.notes-pill.has-count {
+  padding-right: 5px;
+}
+
+.notes-pill[hidden] {
   display: none;
 }
 
-/* While the notes are out, the glyph on their stage stands in for the button's. */
-.notes-toggle.is-away {
+.notes-pill:hover {
+  background: linear-gradient(rgba(var(--fg-rgb), 0.06), rgba(var(--fg-rgb), 0.06)), var(--glass-fill);
+}
+
+.notes-pill:focus-visible {
+  box-shadow: var(--glass-drop), 0 0 0 2px var(--focus-ring);
+}
+
+/* While the notes are out, their panel stands in the button's place. */
+.notes-pill.is-away {
+  visibility: hidden;
+}
+
+.notes-pill-count,
+.notepad-count {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: rgb(var(--fg-rgb));
+  color: rgb(20, 20, 22);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="light"] :is(.notes-pill-count, .notepad-count) {
+  color: rgb(255, 255, 255);
+}
+
+:is(.notes-pill-count, .notepad-count)[hidden] {
+  display: none;
+}
+
+/* The panel the button grows into: the glass of the open search (the same fill, the same deep frost), so what is written
+   on it reads over anything. It stands on the button's own corner; its name is at its head, the cross that closes it in
+   the far corner, and under them the field a note is written in and the notes. */
+.notepad {
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.08);
+  --notepad-width: min(336px, calc(100vw - 16px));
+  --plate: rgba(255, 255, 255, 0.07);
+  --plate-over: rgba(255, 255, 255, 0.11);
+  position: fixed;
+  inset: auto;
+  width: var(--notepad-width);
+  height: auto;
+  margin: 0;
+  padding: 0;
+  overflow: clip;
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, calc(0.42 * var(--shadow))), 0 6px 18px rgba(0, 0, 0, calc(0.2 * var(--shadow)));
+  color: var(--fg-primary);
+}
+
+[data-theme="light"] .notepad {
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.04);
+  --plate: rgba(60, 70, 90, 0.07);
+  --plate-over: rgba(60, 70, 90, 0.11);
+}
+
+/* Going, the glass no longer cuts what it held: the notes fade where they stand while it draws in to the button. */
+.notepad.is-closing {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.notepad-title {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+/* The button's own name, on its way to the panel's head: seen only while the two change places. */
+.notepad-title.is-ghost {
+  opacity: 0;
+}
+
+.notepad-corner {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+.notepad-corner > * {
+  grid-area: 1 / 1;
+}
+
+/* Open, the disc has given way to the cross; it is seen only on the way. */
+.notepad-count {
   opacity: 0;
   pointer-events: none;
 }
 
-/* The notes come out in the manner of the effort's stage: the glyph stays where the button stood and «Notes» stands
-   beside it in large type, with a line under them; below, a sheet grown out of the button holds the field a note is
-   written in and the notes under it. Behind it all lies a soft patch of the selection's veil. */
-.notepad {
-  position: fixed;
-  inset: auto;
-  width: min(340px, calc(100vw - 24px));
-  margin: 0;
+.notepad-close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   padding: 0;
-  overflow: visible;
   border: 0;
+  border-radius: 50%;
+  outline: none;
   background: none;
+  color: rgba(var(--fg-rgb), 0.75);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.notepad-close:hover {
+  background: var(--plate-over);
   color: var(--fg-primary);
 }
 
-.notepad.is-closing {
-  pointer-events: none;
-}
-
-.notepad-veil {
-  position: absolute;
-  z-index: -1;
-  mask-composite: intersect;
-  transition: left 0.5s var(--motion-easing), top 0.5s var(--motion-easing), width 0.5s var(--motion-easing), height 0.5s var(--motion-easing);
-}
-
-/* The glyph lies exactly over the button's own, the name beside it, level with it and clear of the capsule the button
-   stands in. */
-.notepad-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  height: calc(var(--notepad-mark, 32px) + 12px);
-  padding-left: 6px;
-}
-
-.notepad-mark {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: var(--notepad-mark, 32px);
-  height: var(--notepad-mark, 32px);
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  outline: none;
-  background: none;
-  color: rgb(var(--icon-rgb));
-  cursor: pointer;
-}
-
-.notepad-mark:focus-visible {
+.notepad-close:focus-visible {
   box-shadow: inset 0 0 0 2px var(--focus-ring);
 }
 
-/* On the stage the glyph stands in full ink; as the stage goes it takes the button's own tone again, so the button that
-   comes back in its place looks the same. */
-.notepad-glyph {
-  width: var(--notepad-icon, 22px);
-  height: var(--notepad-icon, 22px);
-  overflow: visible;
-  opacity: 0.92;
-  transition: opacity 0.3s ease;
+.notepad-close svg {
+  width: 16px;
+  height: 16px;
 }
 
-.notepad.is-closing .notepad-glyph {
-  opacity: var(--icon-opacity);
-}
-
-.notepad-word {
-  position: relative;
-  height: 1.1em;
-  color: rgb(var(--composer-accent-rgb));
-  font-family: "OpenGhost Display", var(--font);
-  font-size: clamp(26px, 2.6vw, 34px);
-  line-height: 1.1;
-  translate: 0 -1px;
-  pointer-events: none;
+/* What the panel holds keeps the panel's full width while the glass is still growing, so nothing in it is laid out anew. */
+.notepad-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: var(--notepad-width);
+  padding: 54px 10px 10px;
 }
 
 .notepad-hint {
-  max-width: 300px;
-  margin: 8px 0 0 12px;
+  display: none;
+  margin: 6px 10px 8px;
   color: rgba(var(--fg-rgb), 0.55);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   line-height: 17px;
-  text-wrap: balance;
-  pointer-events: none;
 }
 
-.notepad-sheet {
-  position: relative;
-  margin-top: 14px;
+.notepad.is-empty .notepad-hint {
+  display: block;
 }
 
-.notepad-shell {
-  position: absolute;
-  inset: 0;
-  border-radius: 22px;
-  background: var(--composer-bg);
-  box-shadow: inset 0 0 0 1px var(--composer-border), 0 18px 48px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
-  pointer-events: none;
+/* The field a note is written in: a plate with a plus at its head, the first line of the list. */
+.notepad .notepad-form {
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 6px 5px 13px;
+  border-radius: 16px;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.05);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-.notepad-body {
-  position: relative;
-  display: flex;
-  flex-direction: column;
+.notepad .notepad-form::before {
+  content: "";
+  flex: none;
+  width: 14px;
+  height: 14px;
+  background: rgba(var(--fg-rgb), 0.55);
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14' fill='none' stroke='black' stroke-width='1.7' stroke-linecap='round'><path d='M7 2v10M2 7h10'/></svg>") center / contain no-repeat;
+}
+
+.notepad .notepad-form:focus-within {
+  background: var(--plate-over);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.12);
+}
+
+.notepad .notepad-input {
+  padding: 6px 4px 6px 0;
+  font-size: 14px;
+}
+
+.notepad .notepad-input::placeholder {
+  color: rgba(var(--fg-rgb), 0.45);
+}
+
+.notepad .notepad-pane::before {
+  display: none;
+}
+
+.notepad .notepad-pane > .notepad-scrollbar {
+  top: 6px;
+  right: -7px;
+  bottom: 6px;
+}
+
+/* Five notes show whole; with more, the list scrolls. */
+.notepad .notepad-scroll {
+  max-height: min(284px, calc(var(--notepad-room, 520px) - 140px));
+  padding: 0;
+}
+
+.notepad .notepad-list {
+  gap: 6px;
+}
+
+/* A note on its plate: the ring that ticks it off, the note in strong type, and under it when it was written and whose
+   hand wrote it. */
+.notepad .notepad-item {
+  grid-template-columns: 40px minmax(0, 1fr) 34px;
+  align-items: center;
+  min-height: 52px;
+  padding: 7px 2px 7px 2px;
+  border-radius: 16px;
+  background: var(--plate);
+  transition: background-color 0.2s ease;
+}
+
+.notepad .notepad-item:hover {
+  background: var(--plate-over);
+}
+
+.notepad .notepad-tick {
+  justify-self: center;
+  color: rgba(var(--fg-rgb), 0.5);
+}
+
+.notepad-main {
+  min-width: 0;
+}
+
+.notepad .notepad-text {
+  padding: 0 4px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+}
+
+.notepad-meta {
+  padding: 0 4px;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notepad .notepad-item.is-agent .notepad-by {
+  display: none;
+}
+
+.notepad .notepad-remove {
+  margin-top: 0;
+  border-radius: 50%;
 }
 
 /* The row a new note is written in, at the top of the sheet: it stays where it is while the notes gather under it. */
@@ -8661,6 +9131,31 @@ h6.md-h {
   background: var(--control-hover-bg);
 }
 
+/* The same plain frosted glass as the capsule at the top of the chat (.top-tools). */
+.composer-folder.glass-lens {
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-backdrop: blur(5px) saturate(1.5) brightness(1.06);
+  height: 30px;
+  border-radius: 15px;
+  background: var(--glass-fill);
+  box-shadow: var(--glass-drop);
+}
+
+[data-theme="light"] .composer-folder.glass-lens {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(250, 251, 253, 0.65));
+  --glass-rim: rgba(20, 30, 60, 0.1);
+  --glass-backdrop: blur(5px) saturate(1.4) brightness(1.02);
+}
+
+.composer-folder.glass-lens:hover {
+  background: linear-gradient(rgba(var(--fg-rgb), 0.06), rgba(var(--fg-rgb), 0.06)), var(--glass-fill);
+}
+
+.composer-folder.glass-lens:focus-visible {
+  box-shadow: var(--glass-drop), 0 0 0 2px var(--focus-ring);
+}
+
 .composer-folder:focus-visible {
   box-shadow: inset 0 0 0 1px var(--composer-border), 0 0 0 2px var(--focus-ring);
 }
@@ -8980,6 +9475,32 @@ h6.md-h {
   text-overflow: ellipsis;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+
+/* The predicted next message in the place of "Ask anything": its words, cut short if they are long, and the key that
+   takes them. The words are in the field's own colour, the key is quieter. */
+.composer-field.is-predicted .composer-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-overflow: clip;
+}
+
+.composer-guess {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.composer-key {
+  flex: none;
+  padding: 1px 6px 2px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(var(--composer-fg-rgb), 0.35);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.35;
+  opacity: 0.8;
 }
 
 .composer-field.has-value .composer-placeholder,
@@ -9435,6 +9956,32 @@ h6.md-h {
 
 .composer-model[expanded] {
   --icon-rgb: var(--composer-accent-rgb);
+}
+
+/* The send button has grown over them into "Send suggestion": they slip under it and are gone. */
+.composer-effort,
+.composer-model {
+  transition: opacity 0.2s ease, transform 0.32s cubic-bezier(0.3, 0.7, 0.2, 1), filter 0.2s ease, visibility 0s;
+}
+
+.composer-actions.is-suggesting .composer-effort,
+.composer-actions.is-suggesting .composer-model {
+  opacity: 0;
+  transform: translateX(10px) scale(0.88);
+  filter: blur(3px);
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.24s ease, filter 0.16s ease, visibility 0s 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer-effort,
+  .composer-model,
+  .composer-actions.is-suggesting .composer-effort,
+  .composer-actions.is-suggesting .composer-model {
+    transition: none;
+    transform: none;
+    filter: none;
+  }
 }
 
 .model-stage {
@@ -9975,13 +10522,17 @@ h6.md-h {
   border-radius: calc(var(--chat-radius) + var(--chat-gap));
   box-shadow: var(--contour), 0 24px 64px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
   color: var(--fg-primary);
+  /* The settings come and go as Spotlight's panel does. Closed, they grow a little and go into a blur, quickly; what
+     stands here is where they go, and the pace of going. */
   opacity: 0;
-  transform: translateY(8px) scale(0.98);
+  transform: scale(1.06);
+  filter: blur(12px);
   transition:
-    opacity 0.2s ease,
-    transform 0.35s var(--motion-easing),
-    overlay 0.35s allow-discrete,
-    display 0.35s allow-discrete;
+    opacity 0.11s ease-out,
+    transform 0.11s ease-out,
+    filter 0.11s ease-out,
+    overlay 0.11s allow-discrete,
+    display 0.11s allow-discrete;
 }
 
 /* In the light the contour's white inner line stood out as a bright frame around the pale backdrop; a thin cool line outside draws the edge. */
@@ -9997,10 +10548,18 @@ h6.md-h {
   --row-active-lift: none;
 }
 
+/* Opened, they come out of a lighter blur, a little wider and flatter than they stand. */
 .settings[open] {
   display: flex;
   opacity: 1;
   transform: none;
+  filter: none;
+  transition:
+    opacity 0.133s cubic-bezier(0.37, 0, 0.63, 1),
+    transform 0.133s cubic-bezier(0.37, 0, 0.63, 1),
+    filter 0.133s cubic-bezier(0.37, 0, 0.63, 1),
+    overlay 0.133s allow-discrete,
+    display 0.133s allow-discrete;
 }
 
 .settings:focus {
@@ -10010,20 +10569,25 @@ h6.md-h {
 @starting-style {
   .settings[open] {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: scale(1.09, 0.96);
+    filter: blur(5px);
   }
 }
 
 .settings::backdrop {
   background: transparent;
   transition:
-    background-color 0.25s ease,
-    overlay 0.35s allow-discrete,
-    display 0.35s allow-discrete;
+    background-color 0.11s ease-out,
+    overlay 0.11s allow-discrete,
+    display 0.11s allow-discrete;
 }
 
 .settings[open]::backdrop {
   background: var(--backdrop);
+  transition:
+    background-color 0.133s cubic-bezier(0.37, 0, 0.63, 1),
+    overlay 0.133s allow-discrete,
+    display 0.133s allow-discrete;
 }
 
 @starting-style {
@@ -10184,6 +10748,313 @@ h6.md-h {
 
 .settings-tab[aria-selected="true"] .memo-leaf { d: path("M42 37h36v46l-18-19.5L42 83z"); }
 .settings-tab[aria-selected="true"] .memo-line { d: path("M52 50h16"); }
+
+/* Composer: the caret slides to the right and leaves the words written behind it; another section chosen, it slides
+   back the same way. */
+.settings-tab-icon :is(.field-caret, .field-words) {
+  transition: d 0.6s var(--motion-easing), transform 0.6s var(--motion-easing);
+}
+
+.settings-tab[aria-selected="true"] .field-caret { transform: translateX(22px); }
+.settings-tab[aria-selected="true"] .field-words { d: path("M47 60h16"); }
+
+/* Notifications: the bell swings as the section is chosen. */
+.settings-tab-icon .bell {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+.settings-tab[aria-selected="true"] .bell {
+  animation: settings-bell 0.8s var(--motion-easing);
+}
+
+@keyframes settings-bell {
+  20% { transform: rotate(14deg); }
+  45% { transform: rotate(-10deg); }
+  70% { transform: rotate(5deg); }
+}
+
+/* Settings → Notifications (settings-notify.js): a corner of the desktop, where a notification slides in and the app's
+   icon in the taskbar counts one more reply; it plays while the page is open. Off, it rests, dimmed. */
+.notify-stage {
+  position: relative;
+  height: 172px;
+  margin: 16px 0 10px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #2b3446, #3b2f3f 55%, #26323a);
+  isolation: isolate;
+  transition: opacity 0.4s ease, filter 0.4s ease;
+}
+
+/* Its edge, one even hairline all the way round, laid over everything in it. */
+.notify-stage::after {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.08);
+  pointer-events: none;
+}
+
+[data-theme="light"] .notify-stage {
+  background: linear-gradient(135deg, #d5dde9, #e8dade 55%, #d6e2e4);
+}
+
+.notify-block.is-off .notify-stage {
+  opacity: 0.45;
+  filter: saturate(0.4);
+}
+
+.notify-taskbar {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 40px;
+  border-radius: 0 0 16px 16px;
+  background: rgba(30, 30, 34, 0.82);
+}
+
+[data-theme="light"] .notify-taskbar {
+  background: rgba(245, 245, 247, 0.85);
+}
+
+.notify-app-slot {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(var(--fg-rgb), 0.09);
+}
+
+.notify-app {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgb(17, 17, 17);
+  color: rgb(255, 255, 255);
+}
+
+.notify-app::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 9px;
+  right: 9px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(var(--fg-rgb), 0.45);
+}
+
+.notify-app svg {
+  width: 16px;
+  height: 17px;
+}
+
+.notify-eye {
+  fill: rgb(17, 17, 17);
+}
+
+.notify-count {
+  position: absolute;
+  right: -6px;
+  bottom: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #e5484d;
+  box-shadow: 0 0 0 2px rgba(30, 30, 34, 1);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  opacity: 0;
+  transform: scale(0.4);
+}
+
+[data-theme="light"] .notify-count {
+  box-shadow: 0 0 0 2px rgb(245, 245, 247);
+}
+
+/* The notification: a card of glass that slides into the corner, waits, and goes. */
+.notify-toast {
+  position: absolute;
+  right: 12px;
+  bottom: 52px;
+  width: min(268px, calc(100% - 24px));
+  padding: 11px 13px 12px;
+  border-radius: 12px;
+  background: rgba(58, 58, 62, 0.82);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+  color: var(--fg-primary);
+  opacity: 0;
+  transform: translateX(30px);
+}
+
+[data-theme="light"] .notify-toast {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 10px 30px rgba(60, 40, 10, 0.16), inset 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+}
+
+.notify-toast-from {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-secondary);
+  font-size: 11.5px;
+  font-weight: 560;
+}
+
+.notify-toast-from i {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  background: rgb(17, 17, 17);
+  color: rgb(255, 255, 255);
+}
+
+.notify-toast-from svg {
+  width: 9px;
+  height: 10px;
+}
+
+.notify-toast b {
+  display: block;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 650;
+}
+
+.notify-toast-text {
+  display: block;
+  color: var(--fg-secondary);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.notify-stage.is-coming .notify-toast {
+  animation: notify-toast 4.2s var(--motion-easing) both;
+}
+
+.notify-stage.is-coming .notify-count {
+  animation: notify-count 4.2s var(--motion-easing) both;
+}
+
+.notify-stage.is-still .notify-toast,
+.notify-stage.is-still .notify-count {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes notify-toast {
+  0% { opacity: 0; transform: translateX(30px); }
+  10% { opacity: 1; transform: none; }
+  78% { opacity: 1; transform: none; }
+  90%, 100% { opacity: 0; transform: translateX(16px); }
+}
+
+@keyframes notify-count {
+  0%, 8% { opacity: 1; transform: scale(1); }
+  14% { opacity: 1; transform: scale(1.35); }
+  22%, 100% { opacity: 1; transform: scale(1); }
+}
+
+.notify-count-hint {
+  margin-top: 0;
+}
+
+/* The sound: its sign, its name, a button to hear it, its switch. */
+.notify-sound {
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.notify-sound .quick-row-label {
+  flex: 1;
+}
+
+.notify-speaker {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--fg-secondary);
+}
+
+.notify-listen {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.3s ease, transform 0.35s var(--motion-easing);
+}
+
+.notify-listen:hover:not(:disabled) {
+  background: rgba(var(--fg-rgb), 0.11);
+}
+
+.notify-listen:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.notify-listen:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.notify-listen .notify-speaker {
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+}
+
+/* Heard: the waves go out from the speaker, one after the other. */
+.notify-listen.is-playing :is(.notify-speaker-a, .notify-speaker-b) {
+  animation: notify-wave 0.9s var(--motion-easing);
+}
+
+.notify-listen.is-playing .notify-speaker-b {
+  animation-delay: 0.12s;
+}
+
+@keyframes notify-wave {
+  0% { opacity: 1; }
+  30% { opacity: 0; transform: translateX(-2px); }
+  100% { opacity: 1; transform: none; }
+}
+
+.notify-block.is-off .notify-sound {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-tab[aria-selected="true"] .bell,
+  .notify-listen.is-playing :is(.notify-speaker-a, .notify-speaker-b) {
+    animation: none;
+  }
+}
 
 .settings-lead {
   margin: 0 0 4px;
@@ -11098,6 +11969,224 @@ h6.md-h {
   margin-top: 12px;
 }
 
+/* Settings → Composer: the picture of a prediction at work (settings-composer.js). The end of an answer, and under it
+   the message field, as in the chat but smaller. One round of it takes `--round`: "Ask anything" gives way to the
+   predicted words in grey with the Tab key beside them, the key is pressed, the words turn into words written with the
+   caret after them, and the field empties for the next round. Switched off, the field stands empty and the picture
+   steps back. */
+.predict-demo {
+  --round: 7s;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 14px 0 12px;
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  background: rgba(var(--fg-rgb), 0.035);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.06);
+  transition: opacity 0.4s ease;
+}
+
+.predict-demo.is-off {
+  opacity: 0.5;
+}
+
+.predict-demo-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.predict-demo-ghost {
+  flex: none;
+  width: 15px;
+  height: 16px;
+  color: rgba(var(--fg-rgb), 0.4);
+}
+
+.predict-demo-ghost svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.predict-demo-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.predict-demo-lines i {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(var(--fg-rgb), 0.11);
+}
+
+.predict-demo-lines i:nth-child(1) { width: 78%; }
+.predict-demo-lines i:nth-child(2) { width: 64%; }
+.predict-demo-lines i:nth-child(3) { width: 36%; }
+
+.predict-demo-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px 9px 16px;
+  border-radius: 20px;
+  background: var(--composer-bg);
+  box-shadow: inset 0 0 0 1px var(--composer-border), 0 8px 22px rgba(0, 0, 0, calc(0.22 * var(--shadow)));
+}
+
+.predict-demo-field {
+  position: relative;
+  height: 22px;
+  font-size: 14.5px;
+  line-height: 22px;
+  white-space: nowrap;
+}
+
+.predict-demo-ask,
+.predict-demo-guess {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  color: rgb(var(--composer-fg-rgb));
+}
+
+.predict-demo-guess {
+  opacity: 0;
+}
+
+.predict-demo-words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.predict-demo-caret {
+  flex: none;
+  width: 1.5px;
+  height: 17px;
+  margin-left: 1px;
+  border-radius: 1px;
+  background: var(--fg-primary);
+  opacity: 0;
+}
+
+.predict-demo-key {
+  margin-left: 9px;
+}
+
+.predict-demo-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.predict-demo-plus {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  color: rgb(var(--composer-fg-rgb));
+}
+
+.predict-demo-plus::before,
+.predict-demo-plus::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1.6px;
+  margin-top: -0.8px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.predict-demo-plus::after {
+  transform: rotate(90deg);
+}
+
+.predict-demo-send {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgb(var(--composer-accent-rgb));
+  color: rgb(var(--composer-on-accent-rgb));
+}
+
+.predict-demo-send svg {
+  width: 13px;
+  height: 13px;
+}
+
+.predict-demo:not(.is-off) .predict-demo-ask { animation: predict-ask var(--round) ease infinite; }
+.predict-demo:not(.is-off) .predict-demo-guess { animation: predict-guess var(--round) ease infinite; }
+.predict-demo:not(.is-off) .predict-demo-words { animation: predict-words var(--round) ease infinite; }
+.predict-demo:not(.is-off) .predict-demo-key { animation: predict-key var(--round) ease infinite; }
+.predict-demo:not(.is-off) .predict-demo-caret { animation: predict-caret var(--round) linear infinite; }
+.predict-demo:not(.is-off) .predict-demo-send { animation: predict-send var(--round) ease infinite; }
+
+@keyframes predict-ask {
+  0%, 10% { opacity: 1; }
+  15%, 93% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes predict-guess {
+  0%, 13% { opacity: 0; transform: translateX(5px); }
+  21%, 88% { opacity: 1; transform: none; }
+  93%, 100% { opacity: 0; transform: none; }
+}
+
+@keyframes predict-words {
+  0%, 49% { color: rgb(var(--composer-fg-rgb)); }
+  54%, 100% { color: var(--fg-primary); }
+}
+
+@keyframes predict-key {
+  0%, 44% { opacity: 0.8; transform: none; background: transparent; }
+  47% { opacity: 1; transform: scale(0.9) translateY(1px); background: rgba(var(--fg-rgb), 0.2); }
+  51% { opacity: 1; transform: none; background: rgba(var(--fg-rgb), 0.08); }
+  57%, 100% { opacity: 0; transform: none; background: transparent; }
+}
+
+@keyframes predict-caret {
+  0%, 53% { opacity: 0; }
+  54%, 62% { opacity: 1; }
+  63%, 70% { opacity: 0; }
+  71%, 79% { opacity: 1; }
+  80%, 100% { opacity: 0; }
+}
+
+/* The send button comes alive with words to send. */
+@keyframes predict-send {
+  0%, 50% { opacity: 0.35; }
+  56%, 88% { opacity: 1; }
+  94%, 100% { opacity: 0.35; }
+}
+
+.predict-demo.is-off .predict-demo-send {
+  opacity: 0.35;
+}
+
+/* With motion reduced the picture stands still at the moment that says the most: the predicted words and the key. */
+@media (prefers-reduced-motion: reduce) {
+  .predict-demo:not(.is-off) :is(.predict-demo-ask, .predict-demo-guess, .predict-demo-words, .predict-demo-key, .predict-demo-caret, .predict-demo-send) {
+    animation: none;
+  }
+
+  .predict-demo:not(.is-off) .predict-demo-ask { opacity: 0; }
+  .predict-demo:not(.is-off) .predict-demo-guess { opacity: 1; }
+  .predict-demo:not(.is-off) .predict-demo-send { opacity: 0.35; }
+}
+
 /* Memory. The switch is a small capsule whose knob crosses over on a spring; with the memory off the records step back. */
 .memory-head {
   align-items: center;
@@ -11808,6 +12897,26 @@ h6.md-h {
 
 .look-row[data-part="bubble"] .look-swatch {
   width: 42px;
+}
+
+.look-swatch.is-forward {
+  position: relative;
+  z-index: 1;
+}
+
+/* The fine line between the colours that go with the other row's pick and the rest. */
+.look-gap {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  border-radius: 1px;
+  background: rgba(var(--fg-rgb), 0.16);
+}
+
+.look-gap[hidden] {
+  display: none;
 }
 
 /* The theme's own colours, where nothing was picked. */
@@ -13221,11 +14330,42 @@ button.attachment-text {
   }
 }
 
-.browser-toggle {
+/* The browser's button stands in a lens of its own, the pair of the capsule in the chat's other corner (.top-tools):
+   the same low pill of plain frosted glass. */
+.browser-tools {
+  --glass-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.65), rgba(38, 38, 42, 0.65));
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(5px) saturate(1.5) brightness(1.06);
+  --icon-button-size: 26px;
+  --icon-button-radius: 50%;
+  --icon-button-transition: color 0.2s ease, background-color 0.2s ease;
+  --icon-opacity: 0.78;
+  --icon-hover-opacity: 1;
   position: absolute;
   z-index: 3;
-  top: var(--toggle-inset);
-  right: var(--toggle-inset);
+  top: calc(var(--toggle-inset) + 1px);
+  right: calc(var(--toggle-inset) - 2px);
+  display: flex;
+  width: 44px;
+  height: 30px;
+  padding: 2px 9px;
+  overflow: clip;
+  -webkit-app-region: no-drag;
+}
+
+[data-theme="light"] .browser-tools {
+  --glass-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(250, 251, 253, 0.65));
+  --glass-rim: rgba(20, 30, 60, 0.1);
+  --glass-backdrop: blur(5px) saturate(1.4) brightness(1.02);
+}
+
+.browser-tools:has(> [hidden]) {
+  display: none;
+}
+
+.browser-tools > :not([disabled]):hover {
+  --icon-button-bg: rgba(var(--fg-rgb), 0.1);
 }
 
 .browser-toggle[hidden] {
@@ -14044,6 +15184,7 @@ button.attachment-text {
   .approval-foot > *,
   .thread-compact,
   .thread-compact.is-live .thread-compact-text,
+  .thread-compact.is-live .thread-compact-stack i,
   .browser-agent::before,
   .browser-badge .glyph-ghost,
   .browser-ripple::after,
@@ -14060,7 +15201,9 @@ button.attachment-text {
   .spotlight-box::before,
   .spotlight-glide,
   .settings,
+  .settings[open],
   .settings::backdrop,
+  .settings[open]::backdrop,
   .thread-bottom,
   .thread-bottom.is-shown,
   .welcome.is-shown,
@@ -14433,4 +15576,4136 @@ html.is-quick .viewer {
 
 .mini.quick .stats-meter {
   display: none;
+}
+
+/* Settings → General → Language (settings-language.js): a button that names the language in use, and the small menu
+   that opens over it. */
+.lang-head {
+  align-items: center;
+}
+
+.lang-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 11px 0 15px;
+  border: 0;
+  border-radius: 17px;
+  outline: none;
+  background: rgba(var(--fg-rgb), 0.07);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.2s var(--motion-easing), opacity 0.15s ease;
+}
+
+.lang-button:hover {
+  background: rgba(var(--fg-rgb), 0.11);
+}
+
+.lang-button:active {
+  transform: scale(0.97);
+}
+
+.lang-button:focus-visible {
+  box-shadow: 0 0 0 2px var(--chat-bg), 0 0 0 4px var(--focus-ring);
+}
+
+/* The menu lies on the button while it is open. */
+.lang-button.is-open {
+  opacity: 0;
+}
+
+.lang-arrows {
+  width: 9px;
+  height: 13px;
+  color: var(--fg-secondary);
+}
+
+.lang-status {
+  min-height: 0;
+  margin: 0;
+}
+
+.lang-status:not(:empty) {
+  margin-top: 6px;
+}
+
+/* The menu comes and goes as the settings themselves do: out of a slight blur, and back into it quicker. */
+.lang-menu {
+  --lang-menu-bg: rgba(52, 52, 58, 0.86);
+  --lang-menu-rim: rgba(255, 255, 255, 0.1);
+  position: fixed;
+  inset: auto;
+  min-width: 218px;
+  margin: 0;
+  padding: 5px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: var(--lang-menu-bg);
+  backdrop-filter: blur(28px) saturate(1.7);
+  box-shadow: inset 0 0 0 1px var(--lang-menu-rim), 0 18px 48px rgba(0, 0, 0, calc(0.42 * var(--shadow))), 0 3px 10px rgba(0, 0, 0, calc(0.2 * var(--shadow)));
+  color: var(--fg-primary);
+  opacity: 0;
+  transform: scale(0.97);
+  filter: blur(8px);
+  transition:
+    opacity 0.11s ease-out,
+    transform 0.11s ease-out,
+    filter 0.11s ease-out,
+    overlay 0.11s allow-discrete,
+    display 0.11s allow-discrete;
+}
+
+[data-theme="light"] .lang-menu {
+  --lang-menu-bg: rgba(255, 255, 255, 0.9);
+  --lang-menu-rim: rgba(20, 30, 60, 0.09);
+}
+
+.lang-menu:popover-open {
+  opacity: 1;
+  transform: none;
+  filter: blur(0);
+  transition-duration: 0.2s;
+  transition-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+@starting-style {
+  .lang-menu:popover-open {
+    opacity: 0;
+    transform: scale(0.9);
+    filter: blur(6px);
+  }
+}
+
+.lang-menu::backdrop {
+  background: none;
+}
+
+/* One highlight for all rows: it glides to the row under the pointer. */
+.lang-glide {
+  position: absolute;
+  top: 0;
+  right: 5px;
+  left: 5px;
+  height: 36px;
+  border-radius: 11px;
+  background: rgba(var(--fg-rgb), 0.09);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.lang-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 11px;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lang-name {
+  font-weight: 550;
+}
+
+.lang-note {
+  flex: 1;
+  color: var(--fg-secondary);
+  font-size: 13px;
+}
+
+.lang-check {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+}
+
+.lang-option[aria-selected="true"] .lang-check {
+  opacity: 1;
+}
+
+/* Settings → About (settings-about.js). */
+.settings-tab-icon .info-dot {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.settings-tab[aria-selected="true"] .info-dot {
+  animation: settings-info 0.6s var(--motion-easing);
+}
+
+@keyframes settings-info {
+  40% {
+    transform: translateY(-6px);
+  }
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 0 12px;
+}
+
+.about-icon {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 13px;
+  box-shadow: 0 0 0 1px rgba(var(--fg-rgb), 0.08);
+  user-select: none;
+}
+
+.about-name {
+  font-family: "OpenGhost Display", var(--font);
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 30px;
+  letter-spacing: -0.02em;
+}
+
+.about-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--fg-secondary);
+  font-size: 13.5px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.about-beta {
+  padding: 0 7px;
+  border-radius: 9px;
+  background: rgba(var(--fg-rgb), 0.08);
+  color: rgba(var(--fg-rgb), 0.72);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+}
+
+.about-text {
+  margin-bottom: 10px;
+}
+
+.about-facts {
+  margin: 0;
+  border-top: 1px solid rgba(var(--fg-rgb), 0.06);
+}
+
+.about-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(var(--fg-rgb), 0.06);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+.about-fact[hidden] {
+  display: none;
+}
+
+.about-fact dt {
+  flex: none;
+  font-weight: 500;
+}
+
+.about-fact dd {
+  margin: 0;
+  color: var(--fg-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+}
+
+.about-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 14px;
+}
+
+.about-links {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.about-link {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 14px;
+  outline: none;
+  background: rgba(var(--fg-rgb), 0.045);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+}
+
+.about-link:hover {
+  background: rgba(var(--fg-rgb), 0.08);
+}
+
+.about-link:focus-visible {
+  box-shadow: 0 0 0 2px var(--chat-bg), 0 0 0 4px var(--focus-ring);
+}
+
+.about-link-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.about-link-name {
+  font-size: 14px;
+  font-weight: 550;
+  line-height: 19px;
+}
+
+.about-link-hint {
+  color: var(--fg-secondary);
+  font-size: 12.5px;
+  line-height: 17px;
+}
+
+.about-out {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-top: 4px;
+  color: var(--fg-tertiary);
+  transition: transform 0.3s var(--motion-easing), color 0.2s ease;
+}
+
+.about-link:hover .about-out {
+  color: var(--fg-secondary);
+  transform: translate(1.5px, -1.5px);
+}
+
+.about-licence,
+.about-rights {
+  margin: 14px 0 0;
+  color: var(--fg-tertiary);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+.about-rights {
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lang-menu,
+  .about-out {
+    transition-duration: 0.01s;
+  }
+}
+
+/* macOS permissions: while the access is off, a second button opens the app again, and a line says why that is needed. */
+.general-access-actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.general-access-actions .general-access-open {
+  margin-top: 0;
+}
+
+.general-access-note {
+  margin-top: 10px;
+}
+
+.general-access.is-given :is(.general-access-restart, .general-access-note) {
+  display: none;
+}
+
+/* Usage at a glance (usage-peek.js). Its button, a gauge, stands at the far end of the sidebar's foot; the panel it
+   calls stands right over that row, inside the sidebar. */
+.sidebar-footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* The pane is the glass of a folder opened on an iPhone, as measured on a screenshot of one (iOS 26, 3 px to a
+   point):
+   - it lifts what is behind it by about 32 levels of 255 whatever the tone, which is a veil of white a fifth thick;
+     what is behind it is blurred smooth (here the system has blurred it already);
+   - its corners are the system's smooth ones, nearest to a circle of an eighth of the folder's width (--peek-round,
+     set with the width). They are drawn here as plain round corners: the smooth shape is followed by the fill but
+     not by the blur behind it nor by the rim, and a panel showed two corners, one inside the other;
+   - along the top and the bottom runs a hairline of nearly pure white (a point thick on the phone, a 300th of the
+     folder's width); it follows the corner all the way round, thinning, and is gone a few points down the side;
+     inside it lies a faint glow about two points deep;
+   - down the straight of each side, from a little below the corner to a little above the next, there is no light but
+     a dark hairline half a point wide, which leaves 40% of what is outside;
+   - it casts next to no shadow.
+   The window is clear under the sidebar, so the veil lies straight on what is behind the app, as it does there. It
+   has no blur of its own: over a clear window a blur lays the window's tint on twice, and the glass goes dull. */
+.usage-peek {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --peek-rule: rgba(255, 255, 255, 0.12);
+  --peek-over: rgba(255, 255, 255, 0.12);
+  position: fixed;
+  inset: auto;
+  height: auto;
+  max-height: var(--peek-room, 560px);
+  margin: 0;
+  padding: 0;
+  /* Nothing it holds reaches its edge, and the hairlines at its sides lie just outside it. */
+  overflow: visible;
+  border: 0;
+  border-radius: var(--peek-round, 48px);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow:
+    inset 0 3px 3px -3px rgba(255, 255, 255, 0.24),
+    inset 0 -3px 3px -3px rgba(255, 255, 255, 0.2),
+    0 10px 30px rgba(0, 0, 0, calc(0.1 * var(--shadow)));
+  color: var(--fg-primary);
+}
+
+/* The lines of light: a stroke along the top and the bottom and none down the sides, so round each corner it thins
+   away to nothing. Half a pixel is asked for, which is drawn as one pixel of the screen whatever its scale: the
+   folder's line is a hair, and a whole pixel here read as a thick one. */
+.usage-peek::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  border: 0 solid rgba(255, 255, 255, 0.95);
+  border-top-width: 0.5px;
+  border-bottom-width: 0.5px;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* The dark hairlines: down the straight of each side only, coming in and going out softly well clear of the corners.
+   They lie just outside the pane, on what is behind it, and so are darker than both it and the glass. */
+.usage-peek::after {
+  z-index: 1;
+  inset: 0 -0.5px;
+  padding: 0;
+  border: 0 solid rgba(0, 0, 0, 0.55);
+  border-right-width: 0.5px;
+  border-left-width: 0.5px;
+  border-radius: inherit;
+  background: none;
+  -webkit-mask: linear-gradient(to bottom, transparent calc(var(--peek-round, 48px) + 4px), #000 calc(var(--peek-round, 48px) + 26px), #000 calc(100% - var(--peek-round, 48px) - 26px), transparent calc(100% - var(--peek-round, 48px) - 4px));
+  mask: linear-gradient(to bottom, transparent calc(var(--peek-round, 48px) + 4px), #000 calc(var(--peek-round, 48px) + 26px), #000 calc(100% - var(--peek-round, 48px) - 26px), transparent calc(100% - var(--peek-round, 48px) - 4px));
+}
+
+[data-theme="light"] .usage-peek {
+  --peek-rule: rgba(20, 30, 60, 0.1);
+  --peek-over: rgba(20, 30, 60, 0.07);
+}
+
+/* The list of chats steps back from the pane: it fades out as it nears the pane's top (--peek-cut, from the list's
+   own top) and is out of sight below it, by as much as --peek-hide says, which runs from 0 to 1 as the pane comes. */
+@property --peek-hide {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+.chats.is-peeked {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(var(--peek-cut, 100%) - 20px), rgba(0, 0, 0, calc(1 - var(--peek-hide))) var(--peek-cut, 100%));
+  mask-image: linear-gradient(to bottom, #000 calc(var(--peek-cut, 100%) - 20px), rgba(0, 0, 0, calc(1 - var(--peek-hide))) var(--peek-cut, 100%));
+  transition: --peek-hide 0.13s ease-out;
+}
+
+.chats.is-under-peek {
+  --peek-hide: 1;
+}
+
+.usage-peek:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-peek.is-closing {
+  pointer-events: none;
+}
+
+.peek-top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 48px;
+  padding: 4px calc(var(--peek-pad, 16px) - 7px) 0 var(--peek-pad, 16px);
+}
+
+.peek-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.peek-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.7);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.peek-close:hover {
+  background: var(--peek-over);
+  color: var(--fg-primary);
+}
+
+.peek-close:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.peek-close svg {
+  width: 15px;
+  height: 15px;
+}
+
+.peek-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 0 var(--peek-pad, 16px) 12px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.peek-body::-webkit-scrollbar {
+  display: none;
+}
+
+.peek-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A provider: its name and, at the right, what its account says; a fine line parts it from what is above. */
+.peek-provider {
+  padding: 12px 0;
+  border-top: 1px solid var(--peek-rule);
+}
+
+.peek-provider:first-child {
+  padding-top: 2px;
+  border-top: 0;
+}
+
+.peek-provider.is-off {
+  opacity: 0.6;
+}
+
+.peek-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 10px;
+  min-height: 19px;
+  font-size: 13.5px;
+  line-height: 19px;
+}
+
+.peek-name {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.peek-fact {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 19px;
+  margin-left: auto;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* With no words in it yet it has no line of its own to stand on: it keeps to the middle of the row, so the row is as
+   tall as it will be. */
+.peek-fact.is-waiting {
+  align-self: center;
+  min-width: 58px;
+}
+
+.peek-fact-label {
+  color: rgba(var(--fg-rgb), 0.55);
+}
+
+.peek-fact-label:empty {
+  display: none;
+}
+
+.peek-fact-value {
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-limits {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A limit: a small gauge drawn as far as the limit is used, its name and its share beside it, and under them when it
+   starts over. A row is as tall with its words as it is while quiet bars hold their place. */
+.peek-limit {
+  --tone: var(--fg-rgb);
+  display: grid;
+  flex: none;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  grid-template-rows: 17px 15px;
+  align-items: center;
+  column-gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 17px;
+}
+
+.peek-limit.is-high {
+  --tone: 255, 212, 96;
+}
+
+[data-theme="light"] .peek-limit.is-high {
+  --tone: 222, 156, 0;
+}
+
+.peek-limit.is-full {
+  --tone: var(--danger-rgb);
+}
+
+.peek-gauge {
+  grid-row: 1 / 3;
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+}
+
+.peek-gauge path {
+  stroke-width: 3.2;
+  stroke-linecap: round;
+}
+
+.peek-gauge-track {
+  stroke: rgba(var(--fg-rgb), 0.13);
+}
+
+/* The mark runs to its place from wherever it stands. With nothing used there is no mark at all, not even its tip. */
+.peek-gauge-mark {
+  stroke: rgb(var(--tone));
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: calc(1 - var(--used, 0));
+  opacity: clamp(0, calc(var(--used, 0) * 200), 1);
+  transition: stroke-dashoffset 0.9s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s ease, opacity 0.2s ease;
+}
+
+.peek-limit-name,
+.peek-limit-used,
+.peek-limit-reset {
+  position: relative;
+  min-height: 15px;
+  transition: color 0.4s ease;
+}
+
+.peek-limit-name {
+  --bar: 64px;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peek-limit-used {
+  --bar: 28px;
+  min-width: 28px;
+  font-weight: 650;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-limit:is(.is-high, .is-full) .peek-limit-used {
+  color: rgb(var(--tone));
+}
+
+.peek-limit-reset {
+  --bar: 104px;
+  grid-column: 2 / 4;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.55);
+  font-size: 11.5px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peek-limit.is-full .peek-limit-reset {
+  color: rgb(var(--tone));
+}
+
+/* While an answer is on its way, quiet bars hold the place of the words; the words come up out of them. */
+.peek-limit-name::before,
+.peek-limit-used::before,
+.peek-limit-reset::before,
+.peek-fact::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--bar, 100%);
+  max-width: 100%;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 4px;
+  background: rgba(var(--fg-rgb), 0.13);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.peek-limit-used::before {
+  right: 0;
+  left: auto;
+}
+
+.peek-limit.is-waiting :is(.peek-limit-name, .peek-limit-used, .peek-limit-reset) {
+  color: transparent;
+}
+
+.peek-limit.is-waiting :is(.peek-limit-name, .peek-limit-used, .peek-limit-reset)::before,
+.peek-fact.is-waiting::before {
+  opacity: 1;
+  animation: peek-wait 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes peek-wait {
+  to {
+    opacity: 0.4;
+  }
+}
+
+.peek-note {
+  flex: none;
+  margin: 0;
+  color: rgba(var(--fg-rgb), 0.55);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.peek-limits .peek-note {
+  margin-top: 10px;
+}
+
+.peek-note.is-alone {
+  padding: 12px 0;
+  border-top: 1px solid var(--peek-rule);
+}
+
+.peek-note[hidden] {
+  display: none;
+}
+
+/* The way to the whole of it, in the settings. */
+.peek-foot {
+  padding-top: 6px;
+  border-top: 1px solid var(--peek-rule);
+}
+
+.peek-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: calc(100% + 16px);
+  height: 34px;
+  margin: 0 -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  background: none;
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.peek-all:hover {
+  background: var(--peek-over);
+}
+
+.peek-all:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.peek-all svg {
+  width: 12px;
+  height: 12px;
+  color: rgba(var(--fg-rgb), 0.5);
+  transition: transform 0.3s var(--motion-easing);
+}
+
+.peek-all:hover svg {
+  transform: translateX(2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .peek-gauge-mark,
+  .peek-limit-name,
+  .peek-limit-used,
+  .peek-limit-reset {
+    transition: none;
+  }
+
+  .peek-limit.is-waiting :is(.peek-limit-name, .peek-limit-used, .peek-limit-reset)::before,
+  .peek-fact.is-waiting::before {
+    animation: none;
+  }
+}
+
+/* On the light theme the dark hairlines down the pane's sides stood out as black bars: there they are only a breath of
+   shade. */
+[data-theme="light"] .usage-peek::after {
+  border-color: rgba(20, 30, 60, 0.1);
+}
+
+/* The glass of the folder (see .usage-peek above) for the rest of the app's glass: the buttons of the chat, the notes
+   opened and the search opened. The same veil of white a fifth thick in place of the old fill of 65%, and the same
+   contour: a hair of white along the top and the bottom that thins away round the ends, and no light down the sides,
+   only a little shade. These stand over the chat, which is not clear, so they keep their own blur; on the light theme
+   the chat is white and a veil of white would not show on it, so there the glass also dims what is behind it a
+   touch, as glass over a light ground does. */
+html :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens, .notepad, .routines, .spotlight) {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --spot-fill: rgba(255, 255, 255, 0.2);
+  --glass-rim: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(0, 0, 0, 0.4) 42%, rgba(0, 0, 0, 0.4) 58%, rgba(255, 255, 255, 0.95));
+}
+
+html[data-theme="light"] :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens, .notepad, .routines, .spotlight) {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --spot-fill: rgba(255, 255, 255, 0.2);
+  --glass-rim: linear-gradient(180deg, rgb(255, 255, 255), rgba(20, 30, 60, 0.12) 42%, rgba(20, 30, 60, 0.12) 58%, rgb(255, 255, 255));
+  --glass-backdrop: blur(5px) saturate(1.4) brightness(0.96);
+}
+
+/* The panels are tall: their light keeps to the top and the bottom, and the shade runs all the way between. */
+html :is(.notepad, .routines, .spotlight) {
+  --glass-rim: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.95) 4px, rgba(0, 0, 0, 0.4) 44px, rgba(0, 0, 0, 0.4) calc(100% - 44px), rgba(255, 255, 255, 0.95) calc(100% - 4px), rgba(255, 255, 255, 0.95));
+}
+
+html[data-theme="light"] :is(.notepad, .routines, .spotlight) {
+  --glass-rim: linear-gradient(180deg, rgb(255, 255, 255), rgb(255, 255, 255) 4px, rgba(20, 30, 60, 0.12) 44px, rgba(20, 30, 60, 0.12) calc(100% - 44px), rgb(255, 255, 255) calc(100% - 4px), rgb(255, 255, 255));
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(0.97);
+  --spot-frost: blur(34px) saturate(1.9) brightness(0.97);
+}
+
+/* The contour is a hair, not a pixel of the interface. */
+:is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder, .notepad, .routines, .spotlight-panel).glass-lens::after {
+  padding: 0.6px;
+}
+
+
+/* The buttons of the chat are clear glass all over. They had a lens besides their blur, which bent what is behind them
+   along the rim and left it sharper there than in the middle, so the glass looked uneven and less clear than it is:
+   the lens is off, the veil is thinner and the blur lighter. */
+html :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens) {
+  --glass-lens: initial !important;
+  --glass-fill: rgba(255, 255, 255, 0.13);
+  --glass-backdrop: blur(3px) saturate(1.3);
+}
+
+html[data-theme="light"] :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens) {
+  --glass-fill: rgba(255, 255, 255, 0.13);
+  --glass-backdrop: blur(3px) saturate(1.3) brightness(0.96);
+}
+
+/* Under the pointer a button's sign brightens; no grey disc comes up round it. */
+html :is(.top-tools, .browser-tools) > :not([disabled]):hover {
+  --icon-button-bg: transparent;
+}
+
+/* The notes opened are read, so their glass is denser than a button's: under the veil lies a ground of the theme's
+   own tone, and what is behind is blurred further. */
+html :is(.notepad, .routines).glass-lens {
+  --glass-fill: linear-gradient(rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.2)), rgba(26, 26, 30, 0.5);
+  --glass-backdrop: blur(46px) saturate(1.6);
+}
+
+html[data-theme="light"] :is(.notepad, .routines).glass-lens {
+  --glass-fill: rgba(255, 255, 255, 0.62);
+  --glass-backdrop: blur(46px) saturate(1.6) brightness(0.98);
+}
+
+/* One glass on the dark theme. The folder's contour (a line of white along the top and the bottom, shade down the
+   sides) was right on the phone's bright ground and wrong on this dark one: the white lines glared, and on tall panels
+   the shade between them read as dents in the sides. Here every piece of glass has the same contour, one even quiet
+   hairline all the way round, and the notes opened have the search's own glass. The light theme keeps what it has. */
+html:not([data-theme="light"]) :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens, .notepad.glass-lens, .routines.glass-lens, .spotlight) {
+  --glass-rim: rgba(255, 255, 255, 0.16);
+}
+
+html:not([data-theme="light"]) :is(.notepad, .routines).glass-lens {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.08);
+}
+
+html:not([data-theme="light"]) .usage-peek {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, calc(0.1 * var(--shadow)));
+}
+
+html:not([data-theme="light"]) .usage-peek::before {
+  border: 0.6px solid rgba(255, 255, 255, 0.16);
+}
+
+html:not([data-theme="light"]) .usage-peek::after {
+  display: none;
+}
+
+/* A chat's row keeps two buttons, the pin and three dots; the rest is in the dots' menu (row-menu.js). */
+.chat-row:hover .chat-meta,
+.chat-row:focus-within .chat-meta,
+.chat-row.is-confirming .chat-meta,
+.chat-row.is-carding .chat-meta {
+  min-width: 52px;
+}
+
+.chat-row.is-carding .chat-action.is-more {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: rgba(var(--fg-rgb), 0.92);
+}
+
+/* The dots' menu: a small pane of the app's glass, standing over the chat beside the row. */
+.row-menu {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.08);
+  position: fixed;
+  inset: auto;
+  min-width: 208px;
+  margin: 0;
+  padding: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+  color: var(--fg-primary);
+}
+
+[data-theme="light"] .row-menu {
+  --glass-fill: rgba(255, 255, 255, 0.62);
+  --glass-rim: rgba(20, 30, 60, 0.12);
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(0.98);
+}
+
+.row-menu::after {
+  padding: 0.6px;
+}
+
+.row-menu-line {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 14px;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.2s ease;
+}
+
+.row-menu-line:hover,
+.row-menu-line:focus-visible {
+  background: rgba(var(--fg-rgb), 0.1);
+}
+
+.row-menu-line:disabled {
+  opacity: 0.4;
+  background: none;
+  cursor: default;
+}
+
+.row-menu-line .glyph {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  overflow: visible;
+  color: rgba(var(--fg-rgb), 0.7);
+}
+
+.row-menu-line.is-confirming,
+.row-menu-line.is-confirming .glyph {
+  color: rgb(var(--danger-rgb));
+}
+
+/* What comes up over selected words (Ask OpenGhost, Mini chat) is the glass of the chat's buttons. */
+html .select-menu {
+  background: rgba(255, 255, 255, 0.13);
+  -webkit-backdrop-filter: blur(3px) saturate(1.3);
+  backdrop-filter: blur(3px) saturate(1.3);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.16), var(--glass-drop);
+}
+
+html[data-theme="light"] .select-menu {
+  -webkit-backdrop-filter: blur(3px) saturate(1.3) brightness(0.96);
+  backdrop-filter: blur(3px) saturate(1.3) brightness(0.96);
+  box-shadow: inset 0 0 0 0.6px rgba(20, 30, 60, 0.12), var(--glass-drop);
+}
+
+/* The password's card is a pane of the same glass, and comes and goes as the usage panel does: its words and its field
+   lie on the pane, not on a patch of mist, and its title is a pane's title. */
+.lock-card {
+  padding: 16px 16px 14px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.16), 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+}
+
+[data-theme="light"] .lock-card {
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(0.98);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(0.98);
+  box-shadow: inset 0 0 0 0.6px rgba(20, 30, 60, 0.12), 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+}
+
+.lock-card .lock-veil {
+  display: none;
+}
+
+.lock-card .lock-card-title {
+  color: var(--fg-primary);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.lock-card .lock-shell {
+  background: rgba(var(--fg-rgb), 0.09);
+  box-shadow: none;
+}
+
+.lock-card .lock-capsule:focus-within .lock-shell {
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.2);
+}
+
+/* One clearness for all the glass: that of the search opened. Whatever is glass (the buttons of the chat, the notes
+   and their button, the menu of a chat's row, the password's card, the menu over selected words) has the search's own
+   veil and the search's own blur, on either theme. The usage panel has the same veil and no blur, standing where the
+   window itself is clear. */
+html:root:not([data-theme="light"]) :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens, .notepad.glass-lens, .routines.glass-lens, .row-menu) {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.08);
+}
+
+html:root[data-theme="light"] :is(.top-tools, .notes-pill, .routines-pill, .browser-tools, .thread-bottom, .composer-folder.glass-lens, .notepad.glass-lens, .routines.glass-lens, .row-menu) {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(0.97);
+}
+
+html:root:not([data-theme="light"]) :is(.select-menu, .lock-card) {
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+}
+
+html:root[data-theme="light"] :is(.select-menu, .lock-card) {
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+}
+
+/* The menu of a chat's row: one highlight for all its lines, which glides to the line under the pointer as the one in
+   the list of chats does. */
+.row-menu-glide {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  left: 6px;
+  height: 36px;
+  border-radius: 14px;
+  background: rgba(var(--fg-rgb), 0.1);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.row-menu-line {
+  position: relative;
+}
+
+.row-menu-line:hover,
+.row-menu-line:focus-visible {
+  background: none;
+}
+
+/* The chosen chat's row is as quiet as the one under the pointer: the same soft plate, a little denser, with no line
+   round it and no shadow under it. */
+.chats-list .chat-row.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+[data-theme="light"] .chats-list .chat-row.is-active {
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.chats-list .chat-row.is-active:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* A row's two buttons come once, together, and stay where they came. It is their ink that fades in, not the buttons:
+   a button that grew or faded into its place was drawn on a layer of its own meanwhile, set on whole pixels of the
+   screen, and at the end was drawn again where it really stands, which on a screen scaled by 125% or 150% is between
+   pixels, so it twitched. */
+.chat-row .chat-action {
+  color: rgba(var(--fg-rgb), 0);
+  opacity: 1;
+  transform: none;
+  transition: color 0.16s ease, background-color 0.2s ease;
+}
+
+.chat-row:hover .chat-action,
+.chat-row:focus-within .chat-action,
+.chat-row.is-confirming .chat-action,
+.chat-row.is-carding .chat-action {
+  color: rgba(var(--fg-rgb), 0.5);
+  transition-delay: 0.05s, 0s;
+}
+
+.chat-row:hover .chat-action.is-on,
+.chat-row:focus-within .chat-action.is-on,
+.chat-row.is-carding .chat-action.is-on {
+  color: rgba(var(--fg-rgb), 0.85);
+}
+
+.chat-row .chat-actions .chat-action:hover,
+.chat-row .chat-actions .chat-action:focus-visible,
+.chat-row.is-carding .chat-actions .chat-action.is-more {
+  color: rgba(var(--fg-rgb), 0.92);
+  transition-delay: 0s;
+}
+
+.chats-list .chat-row.is-renaming .chat-actions .chat-action {
+  color: rgba(var(--fg-rgb), 0);
+}
+
+/* The time gives way the same way, by its ink: while it shrank on a layer of its own, the dots it lies under were
+   drawn on a layer too, and twitched when that ended. */
+.chat-row .chat-time {
+  transition: color 0.16s ease;
+}
+
+.chat-row:hover .chat-time,
+.chat-row:focus-within .chat-time,
+.chat-row.is-carding .chat-time {
+  color: rgba(var(--fg-rgb), 0);
+  opacity: 1;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* On the light theme the mini chat and the quick chat have no white line round them: a faint cool hairline draws the
+   edge instead. */
+[data-theme="light"] .mini {
+  box-shadow: 0 0 0 0.5px rgba(30, 48, 88, 0.14), 0 30px 80px rgba(0, 0, 0, calc(0.55 * var(--shadow)));
+}
+
+[data-theme="light"] .mini.is-moving {
+  box-shadow: 0 0 0 0.5px rgba(30, 48, 88, 0.14), 0 44px 110px rgba(0, 0, 0, calc(0.62 * var(--shadow)));
+}
+
+/* The quick chat's card stands in a clear window with only a little room round it (desktop/quick.js: 50 above, 80 at
+   the sides, 110 below). The mini chat's deep shadow does not fit there: the window's edge cut it off, and a dark
+   rectangle stood round the card, most of all while it was carried. Its own shadow is shorter and softer and has
+   faded out well before the edge, at rest and carried alike. */
+.mini.quick {
+  box-shadow: var(--contour), 0 20px 48px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
+}
+
+.mini.quick.is-moving {
+  box-shadow: var(--contour), 0 26px 58px rgba(0, 0, 0, calc(0.52 * var(--shadow)));
+}
+
+[data-theme="light"] .mini.quick {
+  box-shadow: 0 0 0 0.5px rgba(30, 48, 88, 0.14), 0 20px 48px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
+}
+
+[data-theme="light"] .mini.quick.is-moving {
+  box-shadow: 0 0 0 0.5px rgba(30, 48, 88, 0.14), 0 26px 58px rgba(0, 0, 0, calc(0.52 * var(--shadow)));
+}
+
+/* The mini chat comes and goes as the settings do: in from a little wider and flatter out of a slight blur, out a
+   little larger into a deeper one. The quick chat's coming is its own script's and is left alone. */
+@keyframes mini-pop {
+  from {
+    opacity: 0;
+    transform: scale(1.09, 0.96);
+    filter: blur(5px);
+  }
+}
+
+@keyframes mini-away {
+  from {
+    opacity: 1;
+    transform: none;
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(12px);
+  }
+}
+
+.mini:not(.quick):popover-open {
+  animation: mini-pop 0.133s cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+@starting-style {
+  .mini:not(.quick):popover-open {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.mini:not(.quick).is-closing {
+  transition: none;
+  animation: mini-away 0.11s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini:not(.quick):popover-open,
+  .mini:not(.quick).is-closing {
+    animation: none;
+  }
+}
+
+/* While the usage panel is out its button is there, not here: it ducks away as the magnifier does while the search is
+   open, and springs back when the panel is gone. */
+.sidebar-usage {
+  transition: opacity 0.3s ease, transform 0.5s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.sidebar-usage.is-away {
+  opacity: 0;
+  transform: scale(0.5) rotate(-30deg);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* The notes' button goes the same way while the notes are out; it is a pill, so it only draws in a little, without
+   the turn. */
+.notes-pill {
+  transition: opacity 0.3s ease, scale 0.5s cubic-bezier(0.34, 1.5, 0.64, 1), left 0.5s var(--motion-easing);
+}
+
+.notes-pill.is-away {
+  visibility: visible;
+  opacity: 0;
+  scale: 0.8;
+  pointer-events: none;
+  transition: opacity 0.16s ease, scale 0.22s cubic-bezier(0.4, 0, 1, 1), left 0.5s var(--motion-easing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-usage,
+  .sidebar-usage.is-away,
+  .notes-pill,
+  .notes-pill.is-away {
+    transition: opacity 0.2s ease;
+    transform: none;
+    scale: none;
+  }
+}
+
+/* A chat opened for the first time is laid out out of sight and shown once it stands still (hold in chat.js). */
+.thread-list.is-settling {
+  visibility: hidden;
+}
+
+/* While a chat is on its way, the ghost waits in the middle of the room, and what was on screen steps back. */
+.thread-wait {
+  position: absolute;
+  inset: 0 0 var(--composer-space, 140px);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  animation: thread-wait 0.24s ease-out 0.08s both;
+}
+
+.thread-wait ghost-thinking {
+  width: 34px;
+  height: 37px;
+  --ghost-rgb: var(--composer-accent-rgb);
+  --ghost-eye: var(--chat-bg);
+  opacity: 0.8;
+}
+
+@keyframes thread-wait {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+.main.is-waiting .thread-list:not(.is-parked) {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.main.is-waiting .welcome {
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+/* The notes' button is yellow glass, as a note is yellow: the same clear glass with a veil of yellow in it, and a rim
+   of the same tone. Only the button; the notes opened keep the plain glass. */
+/* On the dark theme a veil of yellow over the dark ground reads as mustard, so there the button is dense yellow, its
+   words and its disc dark, the number in the disc yellow. */
+html:root:not([data-theme="light"]) .notes-pill.notes-pill {
+  --glass-fill: linear-gradient(rgba(255, 214, 10, 0.92), rgba(255, 198, 0, 0.88));
+  --glass-rim: rgba(255, 240, 170, 0.6);
+  color: rgb(28, 24, 6);
+}
+
+html:root:not([data-theme="light"]) .notes-pill .notes-pill-count {
+  background: rgb(28, 24, 6);
+  color: rgb(255, 214, 10);
+}
+
+html:root[data-theme="light"] .notes-pill.notes-pill {
+  --glass-fill: linear-gradient(rgba(255, 212, 0, 0.5), rgba(255, 196, 0, 0.42)), rgba(255, 255, 255, 0.2);
+  --glass-rim: rgba(214, 160, 0, 0.3);
+}
+
+/* The number in the button's disc stood three quarters of a pixel low: the type's own box is not centred on its
+   figures. The disc keeps its size; the number is lifted to its middle. */
+.notes-pill .notes-pill-count {
+  padding-bottom: 1.5px;
+}
+
+/* The agent's question (ask-card.js). While it waits, the composer is the card of the question: its own field and
+   buttons are away, and the card wears the composer's look, so the one is seen to turn into the other. Several
+   questions are a deck: the cards still to come show their edges behind the one in hand. */
+.composer.is-asking {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.composer.is-asking > :not(.ask) {
+  display: none;
+}
+
+.ask-deck {
+  position: relative;
+  display: grid;
+  isolation: isolate;
+}
+
+.ask-card {
+  grid-area: 1 / 1;
+  align-self: end;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px 16px 12px;
+  overflow: hidden;
+  border-radius: var(--composer-radius);
+  background: var(--composer-bg);
+  box-shadow: inset 0 0 0 1px var(--composer-border), 0 14px 40px rgba(0, 0, 0, calc(0.35 * var(--shadow)));
+  color: rgb(var(--fg-rgb));
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+
+/* The card that was answered goes off the deck over the one coming up, and takes no room as it goes. */
+.ask-card.is-leaving {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.ask-plate {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 72px;
+  border-radius: var(--composer-radius);
+  background: color-mix(in srgb, var(--composer-bg) 84%, rgb(var(--fg-rgb)));
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.12);
+  transform-origin: 50% 0;
+  pointer-events: none;
+}
+
+.ask-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 0 4px;
+  color: rgba(var(--fg-rgb), 0.46);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.ask-tag {
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ask-count {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ask-back {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-left: -5px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.ask-back svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ask-back:hover,
+.ask-back:focus-visible {
+  background: rgba(var(--fg-rgb), 0.08);
+  color: rgba(var(--fg-rgb), 0.9);
+}
+
+.ask-question {
+  margin: 7px 0 14px;
+  padding: 0 4px;
+  font-family: "OpenGhost Display", var(--font);
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ask-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ask-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 52px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 16px;
+  outline: none;
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.1);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, color 0.16s ease, scale 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.ask-option:hover {
+  background: rgba(var(--fg-rgb), 0.045);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.16);
+}
+
+.ask-option:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring, rgba(var(--fg-rgb), 0.4));
+}
+
+.ask-option:active {
+  scale: 0.985;
+}
+
+.ask-number {
+  flex: none;
+  width: 14px;
+  color: rgba(var(--fg-rgb), 0.3);
+  font-family: "OpenGhost Display", var(--font);
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 1;
+  text-align: center;
+  transition: color 0.16s ease;
+}
+
+.ask-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ask-option-label {
+  font-size: 15.5px;
+  font-weight: 580;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.ask-option-note {
+  color: rgba(var(--fg-rgb), 0.54);
+  font-size: 13.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  transition: color 0.16s ease;
+}
+
+/* The choice taken is filled with the composer's own accent, as its send button is. */
+.ask-option.is-on {
+  background: rgb(var(--composer-accent-rgb));
+  box-shadow: none;
+  color: rgb(var(--composer-on-accent-rgb));
+}
+
+.ask-option.is-on .ask-number,
+.ask-option.is-on .ask-option-note {
+  color: rgba(var(--composer-on-accent-rgb), 0.62);
+}
+
+/* Where several may be taken, each row has its box. */
+.ask-box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.5px rgba(var(--fg-rgb), 0.26);
+  color: transparent;
+  transition: background-color 0.16s ease, box-shadow 0.16s ease, color 0.16s ease;
+}
+
+.ask-box svg {
+  width: 13px;
+  height: 13px;
+}
+
+.ask-option.is-on .ask-box {
+  background: rgb(var(--composer-on-accent-rgb));
+  box-shadow: none;
+  color: rgb(var(--composer-accent-rgb));
+}
+
+.ask-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 6px 2px 0 6px;
+}
+
+.ask-own {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+}
+
+.ask-own::placeholder {
+  color: rgba(var(--fg-rgb), 0.4);
+}
+
+.ask-skip {
+  flex: none;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 9px;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.5);
+  font: inherit;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.ask-skip:hover,
+.ask-skip:focus-visible {
+  background: rgba(var(--fg-rgb), 0.07);
+  color: rgba(var(--fg-rgb), 0.9);
+}
+
+.ask-go {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: rgb(var(--composer-accent-rgb));
+  color: rgb(var(--composer-on-accent-rgb));
+  cursor: pointer;
+  transition: opacity 0.2s ease, scale 0.3s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+.ask-go svg {
+  width: 17px;
+  height: 17px;
+}
+
+.ask-go:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.ask-go:not(:disabled):hover {
+  scale: 1.06;
+}
+
+.ask-go:focus-visible {
+  box-shadow: 0 0 0 2px var(--chat-bg), 0 0 0 4px var(--focus-ring, rgba(var(--fg-rgb), 0.4));
+}
+
+/* What was asked and answered stays in the chat as one quiet line: a tick, and a pill for each answer with the short
+   name of its question. */
+.thread-asked {
+  align-self: center;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  max-width: 100%;
+}
+
+/* The tick is one of the pills: as tall as they are and in the same fine rim. */
+.thread-asked-tick {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.12);
+  color: rgba(var(--fg-rgb), 0.6);
+}
+
+.thread-asked-tick svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* The words stand by their capitals at the middle of the pill: a line of text keeps more room over its capitals than
+   under them, so the pill gives a pixel less above; and the name, set small in capitals, is lifted to the same middle. */
+.thread-asked-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  max-width: min(100%, 360px);
+  height: 30px;
+  padding: 4px 12px 6px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.12);
+  font-size: 14.5px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.thread-asked-name {
+  position: relative;
+  top: -1px;
+  flex: none;
+  color: rgba(var(--fg-rgb), 0.44);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.thread-asked-answer {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 540;
+  text-overflow: ellipsis;
+}
+
+.thread-asked-answer.is-skipped {
+  color: rgba(var(--fg-rgb), 0.42);
+  font-weight: 400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ask-option,
+  .ask-go {
+    transition: none;
+  }
+}
+
+/* The agent's own choice wears a small mark beside its name. */
+.ask-mark {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(var(--fg-rgb), 0.09);
+  color: rgba(var(--fg-rgb), 0.62);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  vertical-align: 1.5px;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.ask-option.is-on .ask-mark {
+  background: rgba(var(--composer-on-accent-rgb), 0.14);
+  color: rgba(var(--composer-on-accent-rgb), 0.72);
+}
+
+/* The browser's button keeps clear of the chat's scrollbar, which runs down the same edge. */
+.browser-tools {
+  right: calc(var(--toggle-inset) + 4px);
+}
+
+/* The photo viewer wears the frame of the quick chat's photo window: one card with the photo's name above the photo
+   and, below, the way through the stack and Close. The chat behind is dimmed and a little soft, not whitened. */
+.viewer::backdrop {
+  background: var(--backdrop);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.viewer-frame {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: 18px;
+  background: var(--chat-bg);
+  box-shadow: var(--contour), 0 18px 50px rgba(0, 0, 0, calc(0.4 * var(--shadow)));
+  color: rgba(var(--fg-rgb), 0.85);
+  font-size: 14px;
+  user-select: none;
+}
+
+[data-theme="light"] .viewer-frame {
+  box-shadow: 0 0 0 1px rgba(30, 48, 88, 0.1), 0 18px 50px rgba(0, 0, 0, calc(0.4 * var(--shadow)));
+}
+
+.viewer-img {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.viewer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 18px;
+  font-weight: 650;
+}
+
+/* A photo with no name of its own is called what it is. */
+.viewer-head[data-plain]:not([data-plain=""])::before {
+  content: attr(data-plain);
+}
+
+.viewer-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  margin: 0 14px;
+  border-top: 1px solid rgba(var(--fg-rgb), 0.09);
+}
+
+.viewer-leaf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(var(--fg-rgb), 0.55);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-source {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.viewer-source:empty {
+  display: block;
+}
+
+.viewer-frame .viewer-arrow {
+  position: static;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(var(--fg-rgb), 0.85);
+}
+
+.viewer-frame .viewer-arrow svg {
+  width: 14px;
+  height: 14px;
+}
+
+.viewer-frame .viewer-arrow:hover {
+  background: rgba(var(--fg-rgb), 0.07);
+}
+
+.viewer-frame .viewer-arrow.is-hidden {
+  opacity: 0.28;
+  pointer-events: none;
+}
+
+/* Close is a plain lettered button, a fine line round it. */
+.viewer-frame .viewer-close {
+  position: static;
+  flex: none;
+  display: block;
+  width: auto;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: rgba(var(--fg-rgb), 0.015);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.2), 0 1px 1.5px rgba(0, 0, 0, 0.06);
+  color: rgba(var(--fg-rgb), 0.85);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.viewer-frame .viewer-close:hover {
+  background: rgba(var(--fg-rgb), 0.06);
+}
+
+.viewer-frame .viewer-close:active {
+  transform: scale(0.96);
+}
+
+.viewer-frame .viewer-close:focus-visible,
+.viewer-frame .viewer-arrow:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+/* Where the window is of glass, the sidebar is not blurred by the veil behind the photo (the veil softens only what
+   the page itself has drawn over an opaque ground), so the sidebar is softened by its own hand, as much as the chat. */
+html.is-glass .sidebar {
+  transition: filter 0.26s ease;
+}
+
+html.is-glass.is-viewing .sidebar {
+  filter: blur(6px);
+}
+
+/* Close is a pill of blue glass, as the notes' button is one of yellow: a veil of blue on the light theme, dense blue
+   with white letters on the dark. */
+.viewer-frame .viewer-close {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: linear-gradient(rgba(40, 130, 255, 0.3), rgba(20, 110, 245, 0.24)), rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(30, 110, 235, 0.3);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9);
+  backdrop-filter: blur(34px) saturate(1.9);
+  color: rgb(14, 78, 190);
+  font-weight: 600;
+}
+
+.viewer-frame .viewer-close:hover {
+  background: linear-gradient(rgba(40, 130, 255, 0.4), rgba(20, 110, 245, 0.34)), rgba(255, 255, 255, 0.2);
+}
+
+html:not([data-theme="light"]) .viewer-frame .viewer-close {
+  background: linear-gradient(rgba(60, 142, 255, 0.94), rgba(28, 112, 240, 0.9));
+  box-shadow: inset 0 0 0 1px rgba(170, 205, 255, 0.5);
+  color: rgb(255, 255, 255);
+}
+
+html:not([data-theme="light"]) .viewer-frame .viewer-close:hover {
+  background: linear-gradient(rgba(84, 158, 255, 0.96), rgba(44, 126, 246, 0.92));
+}
+
+.viewer-frame .viewer-close:focus-visible {
+  box-shadow: inset 0 0 0 1px rgba(30, 110, 235, 0.3), 0 0 0 2px var(--focus-ring);
+}
+
+/* The line under the photo is as tall as the one above it, with no rule between it and the photo. */
+.viewer-foot {
+  height: 44px;
+  border-top: 0;
+}
+
+/* The fields of the local models' section hold plain words, not keys: nothing to hide, so no eye and no room for one. */
+.settings-field {
+  padding-right: 16px;
+}
+
+.settings-presets {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.settings-preset {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 13px;
+  outline: none;
+  background: rgba(var(--fg-rgb), 0.07);
+  color: rgba(var(--fg-rgb), 0.8);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.settings-preset:hover {
+  background: rgba(var(--fg-rgb), 0.12);
+}
+
+.settings-preset:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+/* A long word under a field (a server's own error, a warning that names models) wraps under the field instead of
+   pushing the row apart. A short one stands as it did. */
+.settings-status {
+  max-width: 260px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+/* A model with no effort to choose has no effort control in the composer. */
+.composer-effort[hidden] {
+  display: none;
+}
+
+/* One glass for all: the menu of languages is a pane of the same glass as the notes and the menu of a chat's row,
+   with their hairline, their shadow and their highlight, and it comes and goes as they do: in from a little wider and
+   flatter out of a slight blur, out a little larger into a deeper one. */
+html .lang-menu {
+  min-width: 218px;
+  padding: 6px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.16), 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+  opacity: 0;
+  transform: scale(1.06);
+  filter: blur(12px);
+  transition:
+    opacity 0.11s ease-out,
+    transform 0.11s ease-out,
+    filter 0.11s ease-out,
+    overlay 0.11s allow-discrete,
+    display 0.11s allow-discrete;
+}
+
+html[data-theme="light"] .lang-menu {
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+  box-shadow: inset 0 0 0 0.6px rgba(20, 30, 60, 0.12), 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+}
+
+html .lang-menu:popover-open {
+  opacity: 1;
+  transform: none;
+  filter: blur(0px);
+  transition-duration: 0.133s;
+  transition-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+}
+
+@starting-style {
+  html .lang-menu:popover-open {
+    opacity: 0;
+    transform: scale(1.09, 0.96);
+    filter: blur(4px);
+  }
+}
+
+html .lang-glide {
+  right: 6px;
+  left: 6px;
+  border-radius: 14px;
+  background: rgba(var(--fg-rgb), 0.1);
+}
+
+html .lang-option {
+  border-radius: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html .lang-menu,
+  html .lang-menu:popover-open {
+    transform: none;
+    filter: none;
+  }
+}
+
+/* The side of the settings is the notes' glass: what is behind the settings shows through it, blurred, under the
+   same veil and hairline. The page of a section beside it stays as it is. */
+html .settings {
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(1.08);
+  box-shadow: inset 0 0 0 0.6px rgba(255, 255, 255, 0.16), 0 24px 64px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
+}
+
+html[data-theme="light"] .settings {
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+  backdrop-filter: blur(34px) saturate(1.9) brightness(0.97);
+  box-shadow: inset 0 0 0 0.6px rgba(20, 30, 60, 0.12), 0 24px 64px rgba(0, 0, 0, calc(0.45 * var(--shadow)));
+  --row-active-bg: rgba(255, 255, 255, 0.55);
+}
+
+/* Routines (routines.js, routine-panel.js). The button at the top right of a chat with routines, left of the browser's:
+   the browser's button's own glass (the rules of the chat's glass name both), the routine's clock, the word and how
+   many are on. */
+.routines-pill {
+  --glass-shade: 0 0 0 0 transparent;
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--toggle-inset) + 1px);
+  right: calc(var(--toggle-inset) + 4px + 44px + 8px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px 0 9px;
+  border: 0;
+  outline: none;
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: opacity 0.3s ease, scale 0.5s cubic-bezier(0.34, 1.5, 0.64, 1);
+}
+
+/* Where there is no browser's button (the quick chat), the routines' one takes its corner. */
+.main:has(> .browser-tools > [hidden]) .routines-pill {
+  right: calc(var(--toggle-inset) + 4px);
+}
+
+.routines-pill[hidden] {
+  display: none;
+}
+
+.routines-pill.has-count {
+  padding-right: 5px;
+}
+
+.routines-pill:hover {
+  background: linear-gradient(rgba(var(--fg-rgb), 0.06), rgba(var(--fg-rgb), 0.06)), var(--glass-fill);
+}
+
+.routines-pill:focus-visible {
+  box-shadow: var(--glass-drop), 0 0 0 2px var(--focus-ring);
+}
+
+/* While the panel is out it stands in the button's place, and the button draws in a little, as the notes' does. */
+.routines-pill.is-away {
+  opacity: 0;
+  scale: 0.8;
+  pointer-events: none;
+  transition: opacity 0.16s ease, scale 0.22s cubic-bezier(0.4, 0, 1, 1);
+}
+
+.routines-pill-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  opacity: 0.85;
+}
+
+.routines-pill-icon .glyph {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* The hands go round the clock's own middle: (60, 60) of the drawing, whose box starts at (30, 30), so a share of the
+   box would not be it. */
+.glyph-routine :is(.routine-hands, .routine-minute, .routine-hour) {
+  transform-box: view-box;
+  transform-origin: 60px 60px;
+}
+
+/* A turning hand is drawn on a layer of its own, and on a layer it is smoothed a shade otherwise; where it turns, it
+   is kept on that layer at rest too, so it does not flick when a turn starts or ends. */
+:is(.routines-pill, .thread-note.is-routine) .routine-minute {
+  will-change: transform;
+}
+
+.routines-pill-count {
+  display: grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 2px;
+  padding: 0 6px 1.5px;
+  border-radius: 10px;
+  background: rgb(var(--fg-rgb));
+  color: rgb(20, 20, 22);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="light"] .routines-pill-count {
+  color: rgb(255, 255, 255);
+}
+
+.routines-pill-count[hidden] {
+  display: none;
+}
+
+/* The number in the notes' and the routines' discs stands in their middle by its ink (and Figures.center in glyphs.js
+   moves a figure such as 1 over to it). On screens of up to about two pixels to a point the figures are drawn snapped to
+   whole pixels and a little taller: set on their own cap height they stand right there, where the font's line lifted a
+   pixel and a half stood a pixel high. Finer screens draw them as they are, and there that lifted line is what stands
+   right. Measured from 100% to 400% (countmeasure.js). */
+@media (max-resolution: 1.89dppx) {
+  html .notes-pill .notes-pill-count,
+  html .routines-pill-count {
+    padding-top: 0;
+    padding-bottom: 0;
+    text-box: trim-both cap alphabetic;
+  }
+}
+
+/* The panel: the notes' own glass (the rules of the app's glass name both), a little wider for what a routine says
+   about when it runs. */
+.routines {
+  --glass-shade: 0 0 0 0 transparent;
+  --plate: rgba(255, 255, 255, 0.07);
+  --plate-over: rgba(255, 255, 255, 0.11);
+  --chip-on: rgba(255, 255, 255, 0.92);
+  --chip-on-fg: rgb(18, 18, 20);
+  position: fixed;
+  inset: auto;
+  width: min(372px, calc(100vw - 16px));
+  height: auto;
+  margin: 0;
+  padding: 0;
+  overflow: clip;
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, calc(0.42 * var(--shadow))), 0 6px 18px rgba(0, 0, 0, calc(0.2 * var(--shadow)));
+  color: var(--fg-primary);
+}
+
+[data-theme="light"] .routines {
+  --plate: rgba(60, 70, 90, 0.07);
+  --plate-over: rgba(60, 70, 90, 0.11);
+  --chip-on: rgb(28, 28, 30);
+  --chip-on-fg: rgb(255, 255, 255);
+}
+
+/* A new routine is set up beside the sidebar, on the glass of a chat's dots' menu (.row-menu): its even hairline and
+   its shadow. */
+html:root .routines.is-new {
+  box-shadow: 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+}
+
+html:root:not([data-theme="light"]) .routines.is-new.glass-lens {
+  --glass-rim: rgba(255, 255, 255, 0.16);
+}
+
+html:root[data-theme="light"] .routines.is-new.glass-lens {
+  --glass-rim: rgba(20, 30, 60, 0.12);
+}
+
+.routines-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 54px;
+  padding: 0 13px 0 20px;
+}
+
+.routines-back:not([hidden]) + .routines-title {
+  margin-left: -2px;
+}
+
+.routines-head:has(> .routines-back:not([hidden])) {
+  padding-left: 10px;
+}
+
+.routines-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routines-back,
+.routines-close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.75);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.routines-back[hidden] {
+  display: none;
+}
+
+.routines-back:hover,
+.routines-close:hover {
+  background: var(--plate-over);
+  color: var(--fg-primary);
+}
+
+.routines-back:focus-visible,
+.routines-close:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routines-back svg,
+.routines-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* What the panel holds takes the room down to near the window's edge, and scrolls past it. */
+.routines-body {
+  max-height: calc(var(--routines-room, 640px) - 54px);
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.routines-body::-webkit-scrollbar {
+  display: none;
+}
+
+.routines-page {
+  padding: 0 10px 10px;
+}
+
+/* The list: a routine on its plate, its clock, what it does in strong type and under it how often and when next; a
+   pause at its end, which turns to a play for one that waits. */
+.routines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.routines-item {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 36px;
+  align-items: center;
+  min-height: 56px;
+  padding: 6px 2px;
+  border-radius: 16px;
+  background: var(--plate);
+  transition: background-color 0.2s ease;
+}
+
+.routines-item:hover {
+  background: var(--plate-over);
+}
+
+.routines-sign {
+  display: grid;
+  justify-self: center;
+  width: 19px;
+  height: 19px;
+  color: rgba(var(--fg-rgb), 0.7);
+  transition: opacity 0.3s ease;
+}
+
+.routines-sign .glyph {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.routines-item.is-paused .routines-sign,
+.routines-item.is-done .routines-sign {
+  opacity: 0.4;
+}
+
+.routines-main {
+  min-width: 0;
+  padding: 3px 4px;
+  border: 0;
+  border-radius: 8px;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.routines-main:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routines-text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 19px;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  transition: color 0.3s ease;
+}
+
+.routines-meta {
+  display: block;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 17px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routines-item.is-paused .routines-text,
+.routines-item.is-done .routines-text {
+  color: rgba(var(--fg-rgb), 0.5);
+}
+
+.routines-pause {
+  display: grid;
+  justify-self: center;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.55);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+
+.routines-pause[hidden] {
+  display: none;
+}
+
+.routines-pause svg {
+  width: 14px;
+  height: 14px;
+}
+
+.routines-item:hover .routines-pause,
+.routines-item:focus-within .routines-pause,
+.routines-item.is-paused .routines-pause {
+  opacity: 1;
+}
+
+.routines-pause:hover {
+  background: var(--plate-over);
+  color: var(--fg-primary);
+}
+
+.routines-pause:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* A new routine is set up from the line under the list. */
+.routines-new {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 44px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  outline: none;
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.08);
+  color: rgba(var(--fg-rgb), 0.7);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.routines-new:hover {
+  background: var(--plate);
+  color: var(--fg-primary);
+}
+
+.routines-new:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routines-new svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* A routine being set up or changed: what to do, then when, then (for one with a chat of its own) the model and the
+   effort, and at the foot a line of what it will be and the button. */
+.routine-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.routine-field {
+  padding: 4px 4px 4px 13px;
+  border-radius: 16px;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.05);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.routine-field:focus-within {
+  background: var(--plate-over);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.12);
+}
+
+.routine-text {
+  display: block;
+  width: 100%;
+  min-height: 68px;
+  max-height: 170px;
+  margin: 0;
+  padding: 8px 6px 8px 0;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: none;
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 20px;
+  field-sizing: content;
+  scrollbar-width: none;
+}
+
+.routine-text::placeholder {
+  color: rgba(var(--fg-rgb), 0.4);
+}
+
+.routine-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.routine-label {
+  color: rgba(var(--fg-rgb), 0.5);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.routine-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.routine-choice {
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 14px;
+  outline: none;
+  background: var(--plate);
+  color: rgba(var(--fg-rgb), 0.8);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.routine-choice:hover {
+  background: var(--plate-over);
+  color: var(--fg-primary);
+}
+
+.routine-choice:active {
+  transform: scale(0.95);
+}
+
+.routine-choice:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routine-choice.is-on {
+  background: var(--chip-on);
+  color: var(--chip-on-fg);
+}
+
+/* The kinds, and how often, each stand as one row of segments across the panel. */
+:is(.routine-kinds, .routine-often) {
+  flex-wrap: nowrap;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 16px;
+  background: var(--plate);
+}
+
+:is(.routine-kinds, .routine-often) .routine-choice {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  background: none;
+  font-size: 12.5px;
+}
+
+:is(.routine-kinds, .routine-often) .routine-choice:hover {
+  background: var(--plate);
+}
+
+:is(.routine-kinds, .routine-often) .routine-choice.is-on {
+  background: var(--chip-on);
+}
+
+/* How often is a quieter row than the kinds: the step taken is a plate of its own, not a white one. */
+.routine-often {
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.08);
+}
+
+.routine-often .routine-choice.is-on,
+:is(.routine-hours, .routine-ahead) .routine-choice.is-on {
+  background: rgba(var(--fg-rgb), 0.16);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.14);
+  color: var(--fg-primary);
+}
+
+:is(.routine-hours, .routine-ahead) .routine-choice {
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.08);
+}
+
+.routine-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The days of the week: a day taken is lit, one left out stays faint. */
+.routine-days {
+  gap: 4px;
+}
+
+.routine-days .routine-choice {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  background: none;
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.1);
+  color: rgba(var(--fg-rgb), 0.42);
+  font-size: 12.5px;
+}
+
+.routine-days .routine-choice.is-on {
+  background: rgba(var(--fg-rgb), 0.16);
+  box-shadow: none;
+  color: var(--fg-primary);
+  font-weight: 650;
+}
+
+.routine-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.routine-line-label {
+  min-width: 48px;
+  color: rgba(var(--fg-rgb), 0.6);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.routine-time {
+  width: 62px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  background: var(--plate);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.06);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.routine-time:hover {
+  background: var(--plate-over);
+}
+
+.routine-time:focus {
+  background: var(--plate-over);
+  box-shadow: inset 0 0 0 1.5px var(--focus-ring);
+}
+
+.routine-span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.routine-span[hidden] {
+  display: none;
+}
+
+.routine-dash {
+  color: rgba(var(--fg-rgb), 0.45);
+}
+
+.routine-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--plate);
+}
+
+.routine-step {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  outline: none;
+  background: none;
+  color: rgba(var(--fg-rgb), 0.75);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.routine-step:hover {
+  background: var(--plate-over);
+  color: var(--fg-primary);
+}
+
+.routine-step:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routine-step-value {
+  min-width: 30px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+/* The model: its name opens the list of models under it. */
+.routine-ai {
+  gap: 4px;
+  padding-top: 10px;
+  box-shadow: inset 0 1px 0 rgba(var(--fg-rgb), 0.07);
+}
+
+.routine-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: calc(100% - 56px);
+  height: 32px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 12px;
+  outline: none;
+  background: var(--plate);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.routine-model:hover,
+.routine-model.is-open {
+  background: var(--plate-over);
+}
+
+.routine-model:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routine-model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routine-chevron {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: rgba(var(--fg-rgb), 0.55);
+  transition: transform 0.3s var(--motion-easing);
+}
+
+.routine-model.is-open .routine-chevron {
+  transform: rotate(180deg);
+}
+
+/* The list of models: a small pane of the glass of a chat's dots' menu (.row-menu), under the model's name, its lines
+   as that menu's lines, and the chat's own scrollbar beside them. */
+.routine-model-menu {
+  position: fixed;
+  inset: auto;
+  width: 264px;
+  margin: 0;
+  padding: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 20px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+  color: var(--fg-primary);
+}
+
+html:root:not([data-theme="light"]) .routine-model-menu {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-rim: rgba(255, 255, 255, 0.16);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(1.08);
+}
+
+html:root[data-theme="light"] .routine-model-menu {
+  --glass-fill: rgba(255, 255, 255, 0.2);
+  --glass-rim: rgba(20, 30, 60, 0.12);
+  --glass-shade: 0 0 0 0 transparent;
+  --glass-backdrop: blur(34px) saturate(1.9) brightness(0.97);
+}
+
+.routine-model-menu::after {
+  padding: 0.6px;
+}
+
+.routine-find {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-bottom: 4px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  outline: none;
+  background: rgba(var(--fg-rgb), 0.08);
+  color: var(--fg-primary);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.routine-find[hidden] {
+  display: none;
+}
+
+/* The field has the keyboard as soon as the list opens: it only grows a little denser for it, without a ring. */
+.routine-find:focus {
+  background: rgba(var(--fg-rgb), 0.12);
+}
+
+.routine-find::placeholder {
+  color: rgba(var(--fg-rgb), 0.45);
+}
+
+.routine-model-pane {
+  position: relative;
+}
+
+.routine-model-scroll {
+  max-height: min(300px, calc(100vh - 120px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.routine-model-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.routine-model-scroll.is-cut-top {
+  mask-image: linear-gradient(transparent, #000 18px);
+}
+
+.routine-model-scroll.is-cut-bottom {
+  mask-image: linear-gradient(#000 calc(100% - 22px), transparent);
+}
+
+.routine-model-scroll.is-cut-top.is-cut-bottom {
+  mask-image: linear-gradient(transparent, #000 18px, #000 calc(100% - 22px), transparent);
+}
+
+.routine-model-pane > .routine-model-scrollbar {
+  top: 4px;
+  right: -5px;
+  bottom: 4px;
+}
+
+.routine-model-group {
+  padding: 8px 12px 4px 10px;
+  color: rgba(var(--fg-rgb), 0.45);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.routine-model-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 14px;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.routine-model-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* One highlight for all the lines, which glides to the line under the pointer, as the dots' menu's does. */
+.routine-model-rows {
+  position: relative;
+}
+
+.routine-model-glide {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 36px;
+  border-radius: 14px;
+  background: rgba(var(--fg-rgb), 0.1);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.routine-model-row {
+  position: relative;
+}
+
+.routine-model-row svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.routine-model-none {
+  padding: 8px 10px;
+  color: rgba(var(--fg-rgb), 0.5);
+  font-size: 13px;
+}
+
+.routine-effort-box {
+  min-width: 0;
+}
+
+.routine-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.routine-effort-marks {
+  display: inline-flex;
+  padding: 0 2px;
+}
+
+/* Each step is a dash with a hit area round it, as tall as the row. */
+.routine-effort-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  outline: none;
+  background: none;
+  cursor: pointer;
+}
+
+.routine-effort-mark i {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(var(--fg-rgb), 0.2);
+  transition: background-color 0.25s ease, transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.routine-effort-mark.is-on i {
+  background: rgba(var(--fg-rgb), 0.9);
+}
+
+.routine-effort-mark:hover i {
+  transform: scaleY(1.5);
+}
+
+.routine-effort-mark:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.routine-effort-name {
+  color: rgba(var(--fg-rgb), 0.75);
+  font-size: 13.5px;
+  font-weight: 560;
+}
+
+.routine-summary {
+  padding: 10px 4px 0;
+  box-shadow: inset 0 1px 0 rgba(var(--fg-rgb), 0.07);
+  color: rgba(var(--fg-rgb), 0.6);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 17px;
+}
+
+.routine-summary:empty {
+  display: none;
+}
+
+.routine-summary.is-wrong {
+  color: rgb(var(--danger-rgb));
+}
+
+.routine-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px;
+}
+
+/* The words stand in the button's middle by their letters: the line of the font sets them about a pixel low, so they
+   are lifted by a pixel (measured from 100% to 200%, buttonmeasure.js). */
+.routine-action {
+  flex: none;
+  height: 30px;
+  padding: 0 14px 2px;
+  border: 0;
+  border-radius: 15px;
+  outline: none;
+  background: var(--plate);
+  color: rgba(var(--fg-rgb), 0.85);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 560;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease, transform 0.35s cubic-bezier(0.34, 1.45, 0.64, 1);
+}
+
+.routine-action:hover {
+  background: var(--plate-over);
+  color: var(--fg-primary);
+}
+
+.routine-action:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.routine-action:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* Taking a routine away is red, with white words: what it does is plain from its colour. Asking once more, it grows a
+   ring of its own red. */
+.routine-action.is-remove {
+  background: rgb(var(--remove-rgb));
+  color: rgb(255, 255, 255);
+}
+
+.routine-action.is-remove:hover {
+  background: rgb(var(--remove-rgb));
+  color: rgb(255, 255, 255);
+  opacity: 0.88;
+}
+
+.routine-action.is-remove.is-confirming {
+  box-shadow: 0 0 0 2px var(--plate), 0 0 0 3.5px rgb(var(--remove-rgb));
+}
+
+.routines {
+  --remove-rgb: 224, 62, 54;
+}
+
+[data-theme="light"] .routines {
+  --remove-rgb: 214, 48, 40;
+}
+
+/* The one that keeps the routine: as large as the others, at the end of their row, in the accent. */
+.routine-save {
+  margin-left: auto;
+  background: rgb(var(--composer-accent-rgb));
+  color: rgb(var(--composer-on-accent-rgb));
+  font-weight: 600;
+}
+
+.routine-save:hover {
+  background: rgb(var(--composer-accent-rgb));
+  color: rgb(var(--composer-on-accent-rgb));
+  opacity: 0.9;
+}
+
+.routine-save:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.routine-save:focus-visible {
+  box-shadow: 0 0 0 2px var(--composer-bg), 0 0 0 4px var(--focus-ring);
+}
+
+/* In the chat: the notes' black capsule with the clock, the word, and how often in a chip before the task. */
+.routine-chip {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: rgba(var(--pill-rgb), 0.14);
+  color: rgb(var(--pill-rgb));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.routine-chip[hidden] {
+  display: none;
+}
+
+/* The chip and the task make way for the button at the end. */
+.thread-note.is-routine .thread-note-text {
+  margin-right: 2px;
+}
+
+.thread-note.is-removed .thread-note-text,
+.thread-note.is-removed .routine-chip,
+.thread-note.is-paused .routine-chip {
+  opacity: 0.55;
+}
+
+.thread-note.is-removed .thread-note-text {
+  text-decoration: line-through;
+  text-decoration-color: rgba(var(--pill-rgb), 0.35);
+}
+
+/* In the sidebar: a chat with routines wears the clock in the dot's place, dim while they are paused or done. */
+.chat-routine {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(var(--fg-rgb), 0.6);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.2s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+}
+
+.chat-routine .glyph {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+
+.chat-row.is-routine:not(.is-protected):not(.is-busy) .chat-dot,
+.chat-row.is-routine:not(.is-protected):not(.is-busy) .chat-bolt {
+  opacity: 0;
+  transform: scale(0.2);
+}
+
+.chat-row.is-routine:not(.is-protected):not(.is-busy) .chat-routine {
+  opacity: 1;
+  transform: none;
+}
+
+.chat-row.is-routine.is-routine-off .chat-routine {
+  color: rgba(var(--fg-rgb), 0.3);
+}
+
+.chat-row.is-routine.is-active .chat-routine {
+  color: rgba(var(--fg-rgb), 0.9);
+}
+
+.chat-row.is-routine.is-unread .chat-routine {
+  color: rgb(var(--selection-rgb));
+}
+
+/* A fork wears a branch in the dot's place, and stands a step in under the chat it came from, a fork of a fork another
+   step (chat-list.js). Its row keeps its whole width, so the light under the pointer and the open chat's stay as wide as
+   any other; only what is in it moves in. */
+.chat-fork {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(var(--fg-rgb), 0.5);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.2s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.3s ease;
+}
+
+.chat-fork .glyph {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+
+.chat-row.is-forked:not(.is-protected):not(.is-busy):not(.is-routine):not(.is-quick) .chat-dot {
+  opacity: 0;
+  transform: scale(0.2);
+}
+
+.chat-row.is-forked:not(.is-protected):not(.is-busy):not(.is-routine):not(.is-quick) .chat-fork {
+  opacity: 1;
+  transform: none;
+}
+
+.chat-row.is-forked.is-active .chat-fork {
+  color: rgba(var(--fg-rgb), 0.85);
+}
+
+.chat-row.is-forked.is-unread .chat-fork {
+  color: rgb(var(--selection-rgb));
+}
+
+.chat-row {
+  transition: padding-left 0.4s var(--motion-easing);
+}
+
+.chat-row.is-fork-1 {
+  padding-left: 26px;
+}
+
+.chat-row.is-fork-2 {
+  padding-left: 42px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-fork,
+  .chat-row {
+    transition: none;
+  }
+}
+
+.chats-empty.is-routines-hint {
+  height: auto;
+  min-height: 30px;
+  padding: 4px 10px 6px 38px;
+  line-height: 18px;
+}
+
+/* The routines' clock in the group's head moves its minute hand a quarter round as the group folds, and back as it opens. */
+.chats-folder.is-routines .glyph-routine .routine-minute {
+  transition: transform 0.6s var(--motion-easing);
+}
+
+.chats-folder.is-routines.is-collapsed .glyph-routine .routine-minute {
+  transform: rotate(90deg);
+}
+
+/* Settings → General: the switch that keeps the computer awake for routines, and the lid's row under it. */
+.general-awake.is-off .awake-lid,
+.general-awake.is-off .awake-lid-hint {
+  opacity: 0.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .routines-pill,
+  .routines-pill.is-away {
+    transition: opacity 0.2s ease;
+    scale: none;
+  }
+
+  .chats-folder.is-routines .glyph-routine .routine-minute {
+    transition: none;
+  }
+}
+
+/* Skills (skills.js). The book: its pages turn about the spine. */
+.glyph-skill :is(.skill-left, .skill-right) {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform 0.4s var(--motion-easing);
+}
+
+.chats-folder.is-skills .chats-folder-head:hover .skill-left {
+  transform: translateX(-1.5px) rotate(-3deg);
+}
+
+.chats-folder.is-skills .chats-folder-head:hover .skill-right {
+  transform: translateX(1.5px) rotate(3deg);
+}
+
+/* The Skills row of the sidebar is a group's head with nothing under it. */
+.chats-folder.is-skills .chats-folder-body {
+  display: none;
+}
+
+/* In the search: grey plates under the field, as in the search of Apple's apps. */
+.spotlight-chips {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+  overflow: hidden;
+}
+
+.spotlight-chips[hidden] {
+  display: none;
+}
+
+.spotlight-chips-gone {
+  flex: none;
+}
+
+.spotlight-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px 0 9px;
+  border: 0;
+  border-radius: 9px;
+  outline: none;
+  background: rgba(var(--fg-rgb), 0.08);
+  color: rgba(var(--fg-rgb), 0.72);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.spotlight-chip:hover {
+  background: rgba(var(--fg-rgb), 0.13);
+  color: var(--fg-primary);
+}
+
+.spotlight-chip:active {
+  scale: 0.97;
+}
+
+:is(.spotlight-chip-sign, .spotlight-token-sign) {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+}
+
+:is(.spotlight-chip-sign, .spotlight-token-sign) .glyph {
+  width: 15px;
+  height: 15px;
+  overflow: visible;
+}
+
+/* The plate set in the field: a blue capsule before what is typed, like the tokens of Apple's search fields. */
+.spotlight-token {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  margin-left: 50px;
+  padding: 0 11px 0 8px;
+  border-radius: 9px;
+  background: rgba(var(--link-rgb), 0.16);
+  color: rgb(var(--link-rgb));
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.spotlight-token[hidden] {
+  display: none;
+}
+
+.spotlight.is-skills .spotlight-input {
+  padding-left: 10px;
+}
+
+/* A skill: its name, then what it is for, quieter, on the same line. */
+.spotlight-row.is-skill .spotlight-row-title {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.spotlight-skill-name {
+  flex: none;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.spotlight-skill-about {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.46);
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+/* The skills that do not fit what is typed wait below a fine line, dimmed. */
+.spotlight-row.is-skill {
+  transition: opacity 0.3s ease;
+}
+
+.spotlight-row.is-dim {
+  opacity: 0.42;
+}
+
+.spotlight-row.is-forward {
+  z-index: 1;
+}
+
+.spotlight-gap {
+  height: 1px;
+  margin: 6px 14px;
+  background: var(--spot-rule);
+  list-style: none;
+}
+
+/* In the message field and in a sent message: a skill's chip, as a link's, with the book for its sign. */
+.composer-skill-icon {
+  color: rgba(var(--fg-rgb), 0.8);
+}
+
+.skill-chip-inline {
+  cursor: default;
+}
+
+.skill-chip-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  vertical-align: -2px;
+}
+
+.skill-chip-icon .glyph {
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+
+/* In the chat: the notes' capsule with the book, and the skill's name in a chip before what it is for. */
+.skill-chip {
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: rgba(var(--pill-rgb), 0.14);
+  color: rgb(var(--pill-rgb));
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.thread-note.is-skill .thread-note-pill {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glyph-skill :is(.skill-left, .skill-right) {
+    transition: none;
+  }
+}
+
+/* The skills over the message field (skill-picker.js): a small panel of the search's glass. */
+.skill-picker {
+  --spot-fill: linear-gradient(180deg, rgba(54, 54, 60, 0.72), rgba(38, 38, 42, 0.72));
+  --spot-frost: blur(34px) saturate(1.9) brightness(1.08);
+  --spot-plate: rgba(255, 255, 255, 0.09);
+  --glass-rim: rgba(255, 255, 255, 0.14);
+  --glass-shade: 0 0 0 0 transparent;
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: var(--fg-primary);
+  pointer-events: none;
+}
+
+[data-theme="light"] .skill-picker {
+  --spot-fill: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(250, 251, 253, 0.78));
+  --spot-frost: blur(34px) saturate(1.9) brightness(1.04);
+  --spot-plate: rgba(60, 70, 90, 0.1);
+  --glass-rim: rgba(20, 30, 60, 0.1);
+}
+
+.skill-picker-panel {
+  position: absolute;
+  bottom: var(--picker-bottom);
+  left: var(--picker-x);
+  width: var(--picker-width);
+  max-height: 320px;
+  overflow: hidden auto;
+  scrollbar-width: none;
+  transform-origin: 50% 100%;
+  pointer-events: auto;
+}
+
+.skill-picker-panel.glass-lens {
+  border-radius: 18px;
+  background: var(--spot-fill);
+  box-shadow: var(--glass-shade), 0 18px 50px rgba(0, 0, 0, calc(0.36 * var(--shadow))), 0 4px 14px rgba(0, 0, 0, calc(0.18 * var(--shadow)));
+  -webkit-backdrop-filter: var(--spot-frost);
+  backdrop-filter: var(--spot-frost);
+}
+
+/* The contour is a hair, as the search's. */
+.skill-picker-panel.glass-lens::after {
+  padding: 0.6px;
+}
+
+.skill-picker-list {
+  position: relative;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+}
+
+.skill-picker-glide {
+  position: absolute;
+  top: 0;
+  right: 6px;
+  left: 6px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--spot-plate);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.3s cubic-bezier(0.3, 1.2, 0.4, 1), opacity 0.2s ease;
+}
+
+.skill-picker-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 12px 0 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.skill-picker-sign {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  color: rgba(var(--fg-rgb), 0.55);
+}
+
+.skill-picker-sign .glyph {
+  width: 17px;
+  height: 17px;
+  overflow: visible;
+}
+
+.skill-picker-name {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-picker-row[aria-selected="true"] :is(.skill-picker-name, .skill-picker-sign) {
+  color: var(--fg-primary);
+}
+
+.skill-picker-name mark {
+  background: none;
+  color: var(--fg-primary);
+  font-weight: 700;
+}
+
+.skill-picker-about {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(var(--fg-rgb), 0.46);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The card that asks before a skill goes in (SkillCard in skills.js): a sheet in the chat, as a phone's sheet. The
+   skill's own pages lie fanned out at its top and fade into it; under them the book, where the skill comes from, "Add
+   the skill" with its name in blue, what it is for, its files and programs, and one large button. */
+.skill-sheet {
+  --sheet-bg: var(--composer-bg);
+  --sheet-page: #2c2c2f;
+  --sheet-ink: 255, 255, 255;
+  --sheet-button: #f4f4f4;
+  --sheet-button-fg: #111;
+  position: relative;
+  isolation: isolate;
+  width: min(470px, 100%);
+  margin: 18px auto 6px;
+  overflow: hidden;
+  border-radius: 32px;
+  background: var(--sheet-bg);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, calc(0.45 * var(--shadow))), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  text-align: center;
+}
+
+[data-theme="light"] .skill-sheet {
+  --sheet-page: #fbfbfa;
+  --sheet-ink: 0, 0, 0;
+  --sheet-button: #111;
+  --sheet-button-fg: #fff;
+  box-shadow: 0 18px 50px rgba(20, 30, 60, 0.12), 0 2px 8px rgba(20, 30, 60, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.07);
+}
+
+.skill-fan {
+  position: relative;
+  height: 150px;
+  overflow: hidden;
+}
+
+.skill-fan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 10%, var(--sheet-bg) 92%);
+}
+
+.skill-page {
+  position: absolute;
+  top: calc(16px + var(--drop));
+  width: 27%;
+  height: 160px;
+  padding: 12px 11px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--sheet-page);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(var(--sheet-ink), 0.06);
+  color: rgba(var(--sheet-ink), 0.5);
+  font: 7.5px/11px var(--mono-font);
+  text-align: left;
+  transform: rotate(var(--turn));
+}
+
+.skill-page-title {
+  margin: 0 0 6px;
+  overflow: hidden;
+  color: rgba(var(--sheet-ink), 0.82);
+  font: 700 10.5px/13px var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-page-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.skill-page-key {
+  color: rgba(150, 90, 200, 0.85);
+}
+
+html:not([data-theme="light"]) .skill-page-key {
+  color: rgba(200, 160, 240, 0.8);
+}
+
+.skill-page-name {
+  position: absolute;
+  bottom: 9px;
+  left: 11px;
+  right: 11px;
+  overflow: hidden;
+  color: rgba(var(--sheet-ink), 0.42);
+  font: 600 8.5px/11px var(--font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The book, on a tile of the ink's tone: black on the light theme, near white on the dark. */
+.skill-sheet-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin: -58px auto 0;
+  border-radius: 22px;
+  background: var(--sheet-button);
+  color: var(--sheet-button-fg);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.skill-sheet-icon .glyph {
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+}
+
+.skill-sheet-body {
+  padding: 18px 34px 22px;
+}
+
+.skill-sheet-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(var(--link-rgb), 0.12);
+  color: rgb(var(--link-rgb));
+  font-size: 13.5px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.skill-sheet-tag .glyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+}
+
+.skill-sheet-title {
+  margin: 12px 0 0;
+  color: var(--fg-primary);
+  font-size: 30px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 36px;
+  overflow-wrap: anywhere;
+}
+
+.skill-sheet-line,
+.skill-sheet-name {
+  display: block;
+}
+
+.skill-sheet-word {
+  display: inline-block;
+}
+
+.skill-sheet-name {
+  color: rgb(var(--link-rgb));
+}
+
+.skill-sheet-about {
+  display: -webkit-box;
+  max-width: 380px;
+  margin: 12px auto 0;
+  overflow: hidden;
+  color: var(--fg-secondary);
+  font-size: 14.5px;
+  line-height: 21px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.skill-sheet-needs {
+  margin: 8px auto 0;
+  max-width: 380px;
+  color: var(--fg-tertiary);
+  font-size: 12.5px;
+  line-height: 17px;
+}
+
+.skill-sheet-facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.skill-sheet-fact {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 13px;
+  background: rgba(var(--fg-rgb), 0.06);
+  color: var(--fg-secondary);
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 26px;
+  white-space: nowrap;
+}
+
+/* Programs come with it: amber, as what changes the computer is on the approval cards. */
+.skill-sheet-fact.is-programs {
+  background: rgba(var(--warn-rgb), 0.13);
+  color: rgb(var(--warn-rgb));
+}
+
+.skill-sheet-fact.is-programs::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.skill-sheet-inside {
+  height: 26px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  background: none;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  text-decoration: underline;
+  text-decoration-color: rgba(var(--fg-rgb), 0.25);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+.skill-sheet-inside:hover {
+  color: var(--fg-primary);
+  text-decoration-color: rgba(var(--fg-rgb), 0.5);
+}
+
+.skill-sheet-inside:focus-visible {
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+/* What SKILL.md says, as it will be read, and every file it brings; a program among them stands amber. */
+.skill-sheet-details {
+  overflow: hidden;
+}
+
+.skill-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  text-align: left;
+}
+
+.skill-sheet-text,
+.skill-sheet-files {
+  margin: 0;
+  border-radius: 12px;
+  background: var(--well-bg);
+  box-shadow: inset 0 0 0 1px rgba(var(--fg-rgb), 0.05);
+  color: rgba(var(--fg-rgb), 0.85);
+  font: 500 12px/18px var(--mono-font);
+  scrollbar-width: thin;
+}
+
+.skill-sheet-text {
+  max-height: 200px;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.skill-sheet-files {
+  max-height: 180px;
+  padding: 7px 12px;
+  overflow: auto;
+}
+
+.skill-sheet-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-sheet-file.is-program {
+  color: rgb(var(--warn-rgb));
+}
+
+.skill-sheet-file.is-more {
+  color: var(--fg-tertiary);
+  font-family: var(--font);
+}
+
+.skill-sheet-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 56px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: 28px;
+  outline: none;
+  background: var(--sheet-button);
+  color: var(--sheet-button-fg);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.25s var(--motion-easing), filter 0.2s ease, opacity 0.2s ease;
+}
+
+.skill-sheet-add svg {
+  width: 20px;
+  height: 20px;
+}
+
+.skill-sheet-add:hover {
+  filter: brightness(1.12);
+}
+
+[data-theme="light"] .skill-sheet-add:hover {
+  filter: brightness(1.6);
+}
+
+.skill-sheet-add:active {
+  transform: scale(0.985);
+}
+
+.skill-sheet-add:focus-visible {
+  box-shadow: 0 0 0 3px var(--sheet-bg), 0 0 0 5px var(--focus-ring);
+}
+
+.skill-sheet-later {
+  height: 36px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 18px;
+  outline: none;
+  background: none;
+  color: var(--fg-secondary);
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.skill-sheet-later:hover {
+  color: var(--fg-primary);
+}
+
+.skill-sheet-later:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.skill-sheet.is-answered :is(.skill-sheet-add, .skill-sheet-later, .skill-sheet-inside) {
+  cursor: default;
+  pointer-events: none;
+}
+
+.skill-sheet.is-answered:not(.is-allowed) .skill-sheet-add,
+.skill-sheet.is-allowed .skill-sheet-later {
+  opacity: 0.4;
+}
+
+/* Coming in (the sheet itself comes as the search's panel, skills.js): its pages fan out from the middle one after another, the book comes up out of a blur,
+   the words of the headline follow it, then what it is for, the facts and the button. */
+.skill-sheet.is-coming .skill-page {
+  animation: skill-page-fan 0.75s cubic-bezier(0.34, 1.3, 0.64, 1) calc(90ms + var(--k) * 50ms) backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-icon {
+  animation: skill-sheet-pop 0.6s cubic-bezier(0.34, 1.45, 0.64, 1) 220ms backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-tag {
+  animation: skill-sheet-pop 0.45s cubic-bezier(0.34, 1.45, 0.64, 1) 330ms backwards;
+}
+
+.skill-sheet.is-coming :is(.skill-sheet-word, .skill-sheet-name) {
+  animation: skill-sheet-word 0.5s cubic-bezier(0.22, 1, 0.36, 1) calc(380ms + var(--w) * 55ms) backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-about {
+  animation: skill-sheet-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 540ms backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-facts {
+  animation: skill-sheet-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 610ms backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-add {
+  animation: skill-sheet-rise 0.55s cubic-bezier(0.34, 1.3, 0.64, 1) 680ms backwards;
+}
+
+.skill-sheet.is-coming .skill-sheet-later {
+  animation: skill-sheet-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 740ms backwards;
+}
+
+@keyframes skill-page-fan {
+  from {
+    opacity: 0;
+    transform: translate(var(--from), 34px) rotate(0deg) scale(0.9);
+  }
+}
+
+@keyframes skill-sheet-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+    filter: blur(8px);
+  }
+}
+
+@keyframes skill-sheet-word {
+  from {
+    opacity: 0;
+    transform: translateY(0.3em);
+    filter: blur(6px);
+  }
+}
+
+@keyframes skill-sheet-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* While the skills' list is out over the field of a new chat, the folder's pill above the field makes way for it, as it
+   does once the chat has begun, and comes back when the list goes. */
+.main.is-picking .composer-folder {
+  opacity: 0;
+  transform: translateY(10px) scale(0.94);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.35s var(--motion-easing), visibility 0s linear 0.35s;
+}
+
+/* Under the first chats of a group of many: a quiet row that shows the rest, with how many there are. */
+.chats-more {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  margin-bottom: 2px;
+  padding: 0 8px 0 10px;
+  border-radius: 9px;
+  outline: none;
+  color: var(--fg-secondary);
+  font-size: calc(var(--sidebar-font-size) - 0.5px);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.chats-more:hover {
+  color: var(--fg-primary);
+}
+
+.chats-more:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+.chats-more-sign {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+
+.chats-more-sign .glyph {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.45s var(--motion-easing);
+}
+
+.chats-more[data-open="true"] .chats-more-sign .glyph {
+  transform: rotate(180deg);
+}
+
+.chats-more-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.chats-more-count {
+  flex: none;
+  color: var(--fg-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }

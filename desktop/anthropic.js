@@ -10,8 +10,6 @@ const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MAX_OUTPUT = 64000;
 const BUDGET = { low: 4096, high: 16000 };
-// How many of the newest models of one line the picker offers: Opus 5.5 and Opus 5, but not every Opus before them.
-const PER_LINE = 2;
 // With a policy decline the server hands the turn to another model instead of stopping, where the model takes this.
 const FALLBACK = { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' };
 const FINISH = { end_turn: 'stop', tool_use: 'tool_calls', max_tokens: 'length', refusal: 'content_filter', pause_turn: 'stop', stop_sequence: 'stop' };
@@ -51,22 +49,18 @@ function describe(model) {
  };
 }
 
-// The line a model belongs to: its name without the version, so "Claude Opus 5.5" and "Claude Opus 5" are one line.
-const lineOf = model => (model.display_name || model.id).replace(/[\d.]+/g, ' ').replace(/[-\s]+/g, ' ').trim().toLowerCase();
 const released = model => Date.parse(model.created_at) || 0;
 
-// Every model the key can use, the newest first, as the Models API lists them. A model Anthropic releases tomorrow is in
-// the list the next time it is read. Of each line only the newest few stay, or the picker would fill up with models
-// their own successors have replaced.
+// Every model the key can use, the newest first, as the Models API lists them, none left out. A model Anthropic
+// releases tomorrow is in the list the next time it is read. A model the user named by hand that the list does not
+// hold is asked about by its ID; one Anthropic tells nothing of is still offered, as a model that only writes.
 async function models(request) {
  const all = [];
  for await (const model of client(request).models.list({ limit: 1000 })) all.push(model);
- const taken = new Map();
- return all.sort((a, b) => released(b) - released(a)).filter(model => {
-  const line = lineOf(model), count = (taken.get(line) || 0) + 1;
-  taken.set(line, count);
-  return count <= PER_LINE;
- }).map(describe);
+ const listed = all.sort((a, b) => released(b) - released(a)).map(describe), have = new Set(listed.map(model => model.api));
+ const named = [...new Set(request.names || [])].filter(id => !have.has(id));
+ const hand = await Promise.all(named.map(id => client(request).models.retrieve(id).catch(() => ({ id, display_name: id })).then(describe)));
+ return [...listed, ...hand];
 }
 
 const text = content => typeof content === 'string' ? content : (content || []).filter(part => part.type === 'text').map(part => part.text).join('\n');
@@ -153,9 +147,11 @@ function problem(cause) {
 }
 
 // What goes to the Messages API. A request nothing follows (`once`: a summary, a chat's name) asks for no cache at all:
-// writing one costs more than plain input, and nobody would read it.
+// writing one costs more than plain input, and nobody would read it. A request beside the chat (`aside`: a prediction
+// of the user's next message) is the chat's own with a word added: it reads the chat's cache at the marks the chat set
+// and writes none at its own end, which no request will ever start with.
 function build(request, quiet = true) {
- const { model, vision = true, messages, tools, maxTokens, output, once = false } = request;
+ const { model, vision = true, messages, tools, maxTokens, output, once = false, aside = false } = request;
  const { system, messages: history } = convert(once ? messages.map(({ cache, ...message }) => message) : messages, vision);
  const params = {
   model,
@@ -165,7 +161,7 @@ function build(request, quiet = true) {
  };
  if (system.length) params.system = system.map((part, k) => ({ type: 'text', text: part, ...(!once && (k === 0 || k === system.length - 1) ? { cache_control: CACHE } : {}) }));
  // The mark at the end of the request: the API puts it on the last block and moves it on as the chat grows.
- if (!once) params.cache_control = CACHE;
+ if (!once && !aside) params.cache_control = CACHE;
  if (tools?.length) params.tools = tools.map(tool => ({ name: tool.function.name, description: tool.function.description, input_schema: tool.function.parameters, eager_input_streaming: true }));
  return params;
 }
